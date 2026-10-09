@@ -22,13 +22,13 @@ three classes.
 
 | Model | Macro F1 | Mean accuracy | Fold accuracy SD |
 | --- | ---: | ---: | ---: |
-| Logistic Regression | 0.846 | 0.876 | 0.025 |
-| **Support Vector Machine** | **0.855** | **0.889** | **0.020** |
-| Gradient Boosting | 0.855 | 0.889 | 0.026 |
+| Logistic Regression | 0.848 | 0.886 | 0.039 |
+| **Support Vector Machine** | **0.874** | **0.903** | **0.014** |
+| Gradient Boosting | 0.851 | 0.886 | 0.025 |
 
 Support Vector Machine achieved the highest unrounded mean macro F1 and was
 fitted on the 299 training rows for the saved pipeline. On the 75 reserved
-holdout rows, it achieved **0.985 macro F1** and **0.987 accuracy**. The holdout
+holdout rows, it achieved **0.883 macro F1** and **0.920 accuracy**. The holdout
 was not used to choose the model. Full per-class scores and a confusion matrix
 are in [`reports/holdout_evaluation.json`](reports/holdout_evaluation.json).
 These are internal dataset estimates, not results from an external test set.
@@ -65,9 +65,12 @@ sleep-disorder-classification/
 ├── src/
 │   ├── train.py
 │   ├── predict.py
+│   ├── evaluate.py
+│   ├── evaluation.py
 │   └── preprocessing.py
 ├── tests/
 │   ├── test_prediction.py
+│   ├── test_evaluation.py
 │   ├── test_preprocessing.py
 │   └── test_training.py
 ├── .github/workflows/ci.yml
@@ -127,6 +130,23 @@ This command compares the three candidate models, then regenerates:
 
 Optional paths can be supplied with `--data`, `--model-output`,
 `--report-output`, and `--evaluation-output`.
+
+## Evaluate on labeled data
+
+To assess the saved model on another labeled CSV, include all input feature
+columns and a `Sleep Disorder` column with explicit `Healthy`, `Insomnia`, or
+`Sleep Apnea` labels:
+
+```bash
+python -m src.evaluate --data external_patients.csv --output external_evaluation.json
+```
+
+The JSON report contains accuracy, macro F1, per-class precision and recall,
+and a confusion matrix. It also counts rows whose engineered features match a
+profile used to fit the model. Those rows are excluded from the metrics; the
+command fails if no unseen profiles remain. Training fingerprints are stored
+in the model artifact. As with the training report, these metrics are only as
+representative as the supplied dataset.
 
 ## Predict
 

@@ -19,16 +19,15 @@ import pandas as pd
 import seaborn as sns
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 from sklearn.model_selection import StratifiedGroupKFold, cross_validate
 from sklearn.svm import SVC
 
 from src.preprocessing import (
     RANDOM_STATE,
     TARGET_COLUMN,
-    SleepFeatureEngineer,
     build_pipeline,
 )
+from src.evaluation import classification_metrics, feature_fingerprints
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "Sleep_health_and_lifestyle_dataset.csv"
@@ -69,8 +68,7 @@ def candidate_models() -> dict[str, object]:
 def make_feature_groups(features: pd.DataFrame) -> pd.Series:
     """Group rows with identical model inputs, ignoring unused raw columns."""
 
-    model_features = SleepFeatureEngineer().transform(features)
-    return pd.util.hash_pandas_object(model_features, index=False)
+    return feature_fingerprints(features)
 
 
 def split_training_holdout(
@@ -185,18 +183,20 @@ def train(
     final_pipeline.fit(training_features, training_target)
     holdout_predictions = final_pipeline.predict(holdout_features)
     labels = sorted(set(target))
+    metrics = classification_metrics(holdout_target, list(holdout_predictions), labels)
     evaluation = {
         "selected_model": best_model_name,
         "training_rows": len(train_indices),
         "holdout_rows": len(holdout_indices),
         "labels": labels,
-        "holdout_accuracy": float(accuracy_score(holdout_target, holdout_predictions)),
-        "holdout_macro_f1": float(f1_score(holdout_target, holdout_predictions, labels=labels, average="macro", zero_division=0)),
-        "per_class": classification_report(holdout_target, holdout_predictions, labels=labels, output_dict=True, zero_division=0),
-        "confusion_matrix": confusion_matrix(holdout_target, holdout_predictions, labels=labels).tolist(),
+        "holdout_accuracy": metrics["accuracy"],
+        "holdout_macro_f1": metrics["macro_f1"],
+        "per_class": metrics["per_class"],
+        "confusion_matrix": metrics["confusion_matrix"],
     }
     final_pipeline.model_name_ = best_model_name
     final_pipeline.cv_results_ = results
+    final_pipeline.training_feature_hashes_ = set(make_feature_groups(training_features))
     final_pipeline.training_metadata_ = {
         "dataset_sha256": hashlib.sha256(data_path.read_bytes()).hexdigest(),
         "training_rows": len(training_features),
