@@ -11,16 +11,18 @@ Training and prediction therefore apply exactly the same transformations.
 ## Results
 
 Models were compared with stratified, group-aware five-fold cross-validation.
-Rows with identical predictive features stay in the same fold, preventing
-duplicate patient profiles from appearing in both training and validation.
+Rows with identical engineered model features stay in the same fold, preventing
+equivalent patient profiles from appearing in both training and validation.
+Grouping ignores unused columns and treats normalized BMI labels and blood
+pressure formatting consistently.
 Selection was based on mean macro F1, which gives equal importance to all
 three classes.
 
 | Model | Macro F1 | Mean accuracy | Fold accuracy SD |
 | --- | ---: | ---: | ---: |
-| Logistic Regression | 0.863 | 0.891 | 0.059 |
-| **Support Vector Machine** | **0.884** | **0.909** | **0.039** |
-| Gradient Boosting | 0.860 | 0.893 | 0.042 |
+| Logistic Regression | 0.869 | 0.896 | 0.043 |
+| **Support Vector Machine** | **0.889** | **0.912** | **0.051** |
+| Gradient Boosting | 0.876 | 0.904 | 0.044 |
 
 Support Vector Machine achieved the highest mean macro F1 in this comparison
 and was fitted on the full dataset for the saved pipeline. These are internal
@@ -38,8 +40,9 @@ cross-validation estimates, not results from an independent external test set.
 - Categorical features use an encoder that safely handles unseen values.
 - Numeric and categorical missing values are imputed inside each validation
   fold, preventing preprocessing leakage.
-- Identical feature rows are assigned to the same validation group to prevent
-  duplicate-profile leakage.
+- Equivalent engineered feature rows are assigned to the same validation group
+  to prevent duplicate-profile leakage, even when raw formatting or unused
+  columns differ.
 - Model selection uses stratified, group-aware five-fold cross-validation
   instead of one train/test split.
 

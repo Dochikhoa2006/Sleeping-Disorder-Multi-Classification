@@ -21,7 +21,12 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedGroupKFold, cross_validate
 from sklearn.svm import SVC
 
-from src.preprocessing import RANDOM_STATE, TARGET_COLUMN, build_pipeline
+from src.preprocessing import (
+    RANDOM_STATE,
+    TARGET_COLUMN,
+    SleepFeatureEngineer,
+    build_pipeline,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "Sleep_health_and_lifestyle_dataset.csv"
@@ -59,10 +64,10 @@ def candidate_models() -> dict[str, object]:
 
 
 def make_feature_groups(features: pd.DataFrame) -> pd.Series:
-    """Assign identical patient feature rows to the same validation group."""
+    """Group rows with identical model inputs, ignoring unused raw columns."""
 
-    grouping_features = features.drop(columns=["Person ID"], errors="ignore")
-    return pd.util.hash_pandas_object(grouping_features, index=False)
+    model_features = SleepFeatureEngineer().transform(features)
+    return pd.util.hash_pandas_object(model_features, index=False)
 
 
 def compare_models(
