@@ -172,6 +172,21 @@ The output file contains an array of predicted class names in the same order
 as the input. A single patient object also works with `--output-json` and
 produces a one-element array.
 
+### CSV batch prediction
+
+For spreadsheet exports, save a CSV with the same feature names as column
+headers and one patient per row. Extra columns, such as a local record ID, are
+preserved in the output:
+
+```bash
+python -m src.predict --input-csv patients.csv --output-csv predictions.csv
+```
+
+The output adds a `Predicted Sleep Disorder` column. Numeric fields must contain
+numbers; blood pressure uses `systolic/diastolic` format. The command reports
+the CSV row number for invalid records and does not write an output file until
+all rows have passed validation. The input and output paths must differ.
+
 Only load `.joblib` files from sources you trust. Joblib artifacts can execute
 code when loaded.
 

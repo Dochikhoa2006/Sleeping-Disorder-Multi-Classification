@@ -1,4 +1,5 @@
 import unittest
+import csv
 import json
 import tempfile
 from pathlib import Path
@@ -7,7 +8,7 @@ from unittest.mock import patch
 import joblib
 import sklearn
 
-from src.predict import load_patient_json, main, predict, predict_many
+from src.predict import PREDICTION_COLUMN, load_patient_csv, load_patient_json, main, predict, predict_many
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
@@ -50,6 +51,58 @@ class PredictionTests(unittest.TestCase):
 
             self.assertEqual(json.loads(output_path.read_text(encoding="utf-8")),
                              predict_many(patients, MODEL_PATH))
+
+    def test_cli_csv_preserves_rows_and_predictions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "patients.csv"
+            output_path = Path(directory) / "predictions.csv"
+            patients = [self.sample_patient(), {**self.sample_patient(), "Age": 55}]
+            rows = [{**{key: str(value) for key, value in patient.items()},
+                     "Record ID": str(index)} for index, patient in enumerate(patients)]
+            with input_path.open("w", newline="", encoding="utf-8") as input_file:
+                writer = csv.DictWriter(input_file, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+
+            with patch("sys.argv", ["predict", "--input-csv", str(input_path),
+                                    "--output-csv", str(output_path)]):
+                main()
+
+            with output_path.open(newline="", encoding="utf-8") as output_file:
+                results = list(csv.DictReader(output_file))
+            self.assertEqual(
+                results,
+                [{**row, PREDICTION_COLUMN: prediction} for row, prediction
+                 in zip(rows, predict_many(patients, MODEL_PATH))],
+            )
+
+    def test_csv_reports_source_row_and_does_not_write_output(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "patients.csv"
+            output_path = Path(directory) / "predictions.csv"
+            rows = [self.sample_patient(), {**self.sample_patient(), "Age": "invalid"}]
+            with input_path.open("w", newline="", encoding="utf-8") as input_file:
+                writer = csv.DictWriter(input_file, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+
+            with self.assertRaisesRegex(ValueError, "CSV row 3: 'Age'"):
+                load_patient_csv(input_path)
+            with patch("sys.argv", ["predict", "--input-csv", str(input_path),
+                                    "--output-csv", str(output_path)]):
+                with self.assertRaisesRegex(SystemExit, "CSV row 3: 'Age'"):
+                    main()
+            self.assertFalse(output_path.exists())
+
+    def test_csv_rejects_duplicate_headers_and_missing_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "patients.csv"
+            input_path.write_text("Age,Age\n31,32\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "unique"):
+                load_patient_csv(input_path)
+            input_path.write_text(",".join(self.sample_patient()) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "at least one patient"):
+                load_patient_csv(input_path)
 
     def test_rejects_empty_or_non_object_batch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
