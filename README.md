@@ -153,6 +153,18 @@ Then run:
 python -m src.predict --input-json patient.json
 ```
 
+For several patients, supply a JSON array of objects with the same fields.
+Predictions are returned in input order, and invalid records are identified by
+their position. To save machine-readable results:
+
+```bash
+python -m src.predict --input-json patients.json --output-json predictions.json
+```
+
+The output file contains an array of predicted class names in the same order
+as the input. A single patient object also works with `--output-json` and
+produces a one-element array.
+
 Only load `.joblib` files from sources you trust. Joblib artifacts can execute
 code when loaded.
 
