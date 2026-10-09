@@ -10,7 +10,9 @@ Training and prediction therefore apply exactly the same transformations.
 
 ## Results
 
-Models were compared with stratified, group-aware five-fold cross-validation.
+First, one stratified, group-disjoint fold is reserved as a holdout. Models are
+then compared with stratified, group-aware five-fold cross-validation on the
+remaining training rows.
 Rows with identical engineered model features stay in the same fold, preventing
 equivalent patient profiles from appearing in both training and validation.
 Grouping ignores unused columns and treats normalized BMI labels and blood
@@ -20,13 +22,16 @@ three classes.
 
 | Model | Macro F1 | Mean accuracy | Fold accuracy SD |
 | --- | ---: | ---: | ---: |
-| Logistic Regression | 0.869 | 0.896 | 0.043 |
-| **Support Vector Machine** | **0.889** | **0.912** | **0.051** |
-| Gradient Boosting | 0.876 | 0.904 | 0.044 |
+| Logistic Regression | 0.846 | 0.876 | 0.025 |
+| **Support Vector Machine** | **0.855** | **0.889** | **0.020** |
+| Gradient Boosting | 0.855 | 0.889 | 0.026 |
 
-Support Vector Machine achieved the highest mean macro F1 in this comparison
-and was fitted on the full dataset for the saved pipeline. These are internal
-cross-validation estimates, not results from an independent external test set.
+Support Vector Machine achieved the highest unrounded mean macro F1 and was
+fitted on the 299 training rows for the saved pipeline. On the 75 reserved
+holdout rows, it achieved **0.985 macro F1** and **0.987 accuracy**. The holdout
+was not used to choose the model. Full per-class scores and a confusion matrix
+are in [`reports/holdout_evaluation.json`](reports/holdout_evaluation.json).
+These are internal dataset estimates, not results from an external test set.
 
 ![Model comparison](reports/model_comparison.png)
 
@@ -44,7 +49,7 @@ cross-validation estimates, not results from an independent external test set.
   to prevent duplicate-profile leakage, even when raw formatting or unused
   columns differ.
 - Model selection uses stratified, group-aware five-fold cross-validation
-  instead of one train/test split.
+  within a training partition; a group-disjoint holdout evaluates the winner.
 
 ## Repository Structure
 
@@ -55,7 +60,8 @@ sleep-disorder-classification/
 ├── models/
 │   └── sleep_disorder_pipeline.joblib
 ├── reports/
-│   └── model_comparison.png
+│   ├── model_comparison.png
+│   └── holdout_evaluation.json
 ├── src/
 │   ├── train.py
 │   ├── predict.py
@@ -117,9 +123,10 @@ This command compares the three candidate models, then regenerates:
 
 - `models/sleep_disorder_pipeline.joblib`
 - `reports/model_comparison.png`
+- `reports/holdout_evaluation.json`
 
-Optional paths can be supplied with `--data`, `--model-output`, and
-`--report-output`.
+Optional paths can be supplied with `--data`, `--model-output`,
+`--report-output`, and `--evaluation-output`.
 
 ## Predict
 
@@ -220,8 +227,9 @@ Exact tested dependency versions are pinned in `requirements.txt`.
 - Fold standard deviations describe variation among five correlated
   validation folds; they are not population confidence intervals or
   guarantees for future data.
-- Model selection and reporting use the same internal cross-validation, so
-  the comparison can be optimistic and should be confirmed on external data.
+- The holdout is one split of a small synthetic dataset; its high score may
+  vary substantially with a different split and needs confirmation on external
+  data. Cross-validation scores used for selection may still be optimistic.
 
 ## License
 

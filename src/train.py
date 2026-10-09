@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 
 import joblib
@@ -18,6 +19,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 from sklearn.model_selection import StratifiedGroupKFold, cross_validate
 from sklearn.svm import SVC
 
@@ -32,6 +34,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "Sleep_health_and_lifestyle_dataset.csv"
 DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
 DEFAULT_REPORT_PATH = PROJECT_ROOT / "reports" / "model_comparison.png"
+DEFAULT_EVALUATION_PATH = PROJECT_ROOT / "reports" / "holdout_evaluation.json"
 
 
 def load_training_data(path: Path) -> tuple[pd.DataFrame, pd.Series]:
@@ -68,6 +71,22 @@ def make_feature_groups(features: pd.DataFrame) -> pd.Series:
 
     model_features = SleepFeatureEngineer().transform(features)
     return pd.util.hash_pandas_object(model_features, index=False)
+
+
+def split_training_holdout(
+    features: pd.DataFrame, target: pd.Series
+) -> tuple[np.ndarray, np.ndarray]:
+    """Reserve one stratified, group-disjoint fold before model selection."""
+    groups = make_feature_groups(features)
+    splitter = StratifiedGroupKFold(
+        n_splits=5, shuffle=True, random_state=RANDOM_STATE
+    )
+    train_indices, holdout_indices = next(
+        splitter.split(features, target, groups=groups)
+    )
+    if set(groups.iloc[train_indices]) & set(groups.iloc[holdout_indices]):
+        raise RuntimeError("Equivalent profiles crossed the holdout boundary.")
+    return train_indices, holdout_indices
 
 
 def compare_models(
@@ -152,19 +171,38 @@ def train(
     data_path: Path = DEFAULT_DATA_PATH,
     model_path: Path = DEFAULT_MODEL_PATH,
     report_path: Path = DEFAULT_REPORT_PATH,
+    evaluation_path: Path = DEFAULT_EVALUATION_PATH,
 ) -> dict[str, dict[str, float]]:
     features, target = load_training_data(data_path)
-    results, best_model_name = compare_models(features, target)
+    train_indices, holdout_indices = split_training_holdout(features, target)
+    training_features = features.iloc[train_indices]
+    training_target = target.iloc[train_indices]
+    holdout_features = features.iloc[holdout_indices]
+    holdout_target = target.iloc[holdout_indices]
+    results, best_model_name = compare_models(training_features, training_target)
 
     final_pipeline = build_pipeline(candidate_models()[best_model_name])
-    final_pipeline.fit(features, target)
+    final_pipeline.fit(training_features, training_target)
+    holdout_predictions = final_pipeline.predict(holdout_features)
+    labels = sorted(set(target))
+    evaluation = {
+        "selected_model": best_model_name,
+        "training_rows": len(train_indices),
+        "holdout_rows": len(holdout_indices),
+        "labels": labels,
+        "holdout_accuracy": float(accuracy_score(holdout_target, holdout_predictions)),
+        "holdout_macro_f1": float(f1_score(holdout_target, holdout_predictions, labels=labels, average="macro", zero_division=0)),
+        "per_class": classification_report(holdout_target, holdout_predictions, labels=labels, output_dict=True, zero_division=0),
+        "confusion_matrix": confusion_matrix(holdout_target, holdout_predictions, labels=labels).tolist(),
+    }
     final_pipeline.model_name_ = best_model_name
     final_pipeline.cv_results_ = results
     final_pipeline.training_metadata_ = {
         "dataset_sha256": hashlib.sha256(data_path.read_bytes()).hexdigest(),
-        "training_rows": len(features),
-        "unique_feature_groups": int(make_feature_groups(features).nunique()),
-        "validation": "5-fold stratified group cross-validation",
+        "training_rows": len(training_features),
+        "holdout_rows": len(holdout_features),
+        "unique_feature_groups": int(make_feature_groups(training_features).nunique()),
+        "validation": "5-fold stratified group cross-validation on training partition, followed by a group-disjoint holdout",
         "selection_metric": "mean macro F1",
         "joblib_version": joblib.__version__,
         "numpy_version": np.__version__,
@@ -175,6 +213,8 @@ def train(
     model_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(final_pipeline, model_path)
     save_comparison_plot(results, report_path)
+    evaluation_path.parent.mkdir(parents=True, exist_ok=True)
+    evaluation_path.write_text(json.dumps(evaluation, indent=2) + "\n", encoding="utf-8")
 
     print(f"Selected model: {best_model_name}")
     for name, metrics in results.items():
@@ -185,6 +225,8 @@ def train(
         )
     print(f"Saved pipeline to: {model_path}")
     print(f"Saved report to: {report_path}")
+    print(f"Holdout: macro F1={evaluation['holdout_macro_f1']:.3f}, accuracy={evaluation['holdout_accuracy']:.3f} ({len(holdout_indices)} rows)")
+    print(f"Saved holdout evaluation to: {evaluation_path}")
     return results
 
 
@@ -195,9 +237,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA_PATH)
     parser.add_argument("--model-output", type=Path, default=DEFAULT_MODEL_PATH)
     parser.add_argument("--report-output", type=Path, default=DEFAULT_REPORT_PATH)
+    parser.add_argument("--evaluation-output", type=Path, default=DEFAULT_EVALUATION_PATH)
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     arguments = parse_args()
-    train(arguments.data, arguments.model_output, arguments.report_output)
+    train(arguments.data, arguments.model_output, arguments.report_output, arguments.evaluation_output)

@@ -4,10 +4,36 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
 from src.preprocessing import RAW_FEATURES, build_pipeline
-from src.train import make_feature_groups
+from src.train import make_feature_groups, split_training_holdout
 
 
 class TrainingTests(unittest.TestCase):
+    def test_holdout_keeps_duplicate_profiles_together(self) -> None:
+        base = {
+            "Gender": "Female", "Age": 30, "Occupation": "Engineer",
+            "Sleep Duration": 7.5, "Quality of Sleep": 8,
+            "Physical Activity Level": 45, "Stress Level": 4,
+            "BMI Category": "Normal", "Blood Pressure": "120/80",
+            "Heart Rate": 68, "Daily Steps": 8_000,
+        }
+        rows = []
+        labels = []
+        for index in range(30):
+            label = ["Healthy", "Insomnia", "Sleep Apnea"][index % 3]
+            for duplicate in range(2):
+                rows.append({**base, "Age": 25 + index, "Person ID": len(rows),
+                             "BMI Category": "Normal Weight" if duplicate else "Normal"})
+                labels.append(label)
+        features = pd.DataFrame(rows)
+        target = pd.Series(labels)
+
+        train_indices, holdout_indices = split_training_holdout(features, target)
+        groups = make_feature_groups(features)
+
+        self.assertFalse(set(groups.iloc[train_indices]) & set(groups.iloc[holdout_indices]))
+        self.assertEqual(len(train_indices) + len(holdout_indices), len(features))
+        self.assertEqual(set(target.iloc[holdout_indices]), set(target))
+
     def test_duplicate_features_share_a_validation_group(self) -> None:
         base = {
             "Gender": "Female", "Age": 30, "Occupation": "Engineer",
