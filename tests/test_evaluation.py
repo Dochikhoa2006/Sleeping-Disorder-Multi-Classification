@@ -1,13 +1,15 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import joblib
 import pandas as pd
 
-from src.evaluation import evaluate_external
+from src.evaluation import evaluate_external, feature_fingerprints
 from src.predict import predict
 from src.preprocessing import TARGET_COLUMN
-from src.train import DEFAULT_DATA_PATH, DEFAULT_MODEL_PATH, split_training_holdout
+from src.train import DEFAULT_MODEL_PATH
 
 
 class ExternalEvaluationTests(unittest.TestCase):
@@ -33,21 +35,19 @@ class ExternalEvaluationTests(unittest.TestCase):
         }
 
     def test_external_report_excludes_training_profiles(self) -> None:
-        dataset = pd.read_csv(DEFAULT_DATA_PATH)
-        features = dataset.drop(columns=[TARGET_COLUMN])
-        target = dataset[TARGET_COLUMN].fillna("Healthy")
-        train_indices, _ = split_training_holdout(features, target)
-        overlapping = features.iloc[train_indices[0]].to_dict()
-        overlapping["Age"] = float(overlapping["Age"])
-        overlapping[TARGET_COLUMN] = target.iloc[train_indices[0]]
+        overlapping = self.new_patient(96)
+        overlapping[TARGET_COLUMN] = predict(overlapping, DEFAULT_MODEL_PATH)
         unseen = self.new_patient(97)
         unseen[TARGET_COLUMN] = predict(unseen, DEFAULT_MODEL_PATH)
+        pipeline = joblib.load(DEFAULT_MODEL_PATH)
+        pipeline.training_feature_hashes_ = set(feature_fingerprints(pd.DataFrame([overlapping])))
 
         with tempfile.TemporaryDirectory() as directory:
             data_path = Path(directory) / "external.csv"
             output_path = Path(directory) / "evaluation.json"
             pd.DataFrame([overlapping, unseen]).to_csv(data_path, index=False)
-            report = evaluate_external(data_path, DEFAULT_MODEL_PATH, output_path)
+            with patch("src.evaluation.joblib.load", return_value=pipeline):
+                report = evaluate_external(data_path, DEFAULT_MODEL_PATH, output_path)
 
             self.assertEqual(report["training_overlap_rows"], 1)
             self.assertEqual(report["evaluated_rows"], 1)
@@ -55,18 +55,17 @@ class ExternalEvaluationTests(unittest.TestCase):
             self.assertTrue(output_path.exists())
 
     def test_external_report_rejects_only_overlapping_rows(self) -> None:
-        dataset = pd.read_csv(DEFAULT_DATA_PATH)
-        features = dataset.drop(columns=[TARGET_COLUMN])
-        target = dataset[TARGET_COLUMN].fillna("Healthy")
-        train_indices, _ = split_training_holdout(features, target)
-        row = features.iloc[train_indices[0]].to_dict()
-        row[TARGET_COLUMN] = target.iloc[train_indices[0]]
+        row = self.new_patient(96)
+        row[TARGET_COLUMN] = predict(row, DEFAULT_MODEL_PATH)
+        pipeline = joblib.load(DEFAULT_MODEL_PATH)
+        pipeline.training_feature_hashes_ = set(feature_fingerprints(pd.DataFrame([row])))
         with tempfile.TemporaryDirectory() as directory:
             data_path = Path(directory) / "external.csv"
             output_path = Path(directory) / "evaluation.json"
             pd.DataFrame([row]).to_csv(data_path, index=False)
-            with self.assertRaisesRegex(ValueError, "no unseen rows"):
-                evaluate_external(data_path, DEFAULT_MODEL_PATH, output_path)
+            with patch("src.evaluation.joblib.load", return_value=pipeline):
+                with self.assertRaisesRegex(ValueError, "no unseen rows"):
+                    evaluate_external(data_path, DEFAULT_MODEL_PATH, output_path)
             self.assertFalse(output_path.exists())
 
 
