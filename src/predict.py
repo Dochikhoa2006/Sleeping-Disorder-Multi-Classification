@@ -209,8 +209,12 @@ def main() -> None:
         raise SystemExit("Error: --output-json requires --input-json.")
     if arguments.output_csv and not arguments.input_csv:
         raise SystemExit("Error: --output-csv requires --input-csv.")
-    if arguments.input_csv and arguments.output_csv == arguments.input_csv:
-        raise SystemExit("Error: --output-csv must differ from --input-csv.")
+    output = arguments.output_json or arguments.output_csv
+    source = arguments.input_json or arguments.input_csv
+    if output and source and output.resolve() == source.resolve():
+        raise SystemExit("Error: output path must differ from input path.")
+    if output and output.resolve() == arguments.model.resolve():
+        raise SystemExit("Error: output path must differ from model path.")
     try:
         if arguments.input_csv:
             columns, original_rows, patients = load_patient_csv(arguments.input_csv)

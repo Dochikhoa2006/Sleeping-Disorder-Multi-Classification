@@ -15,6 +15,24 @@ MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
 
 
 class PredictionTests(unittest.TestCase):
+    def test_cli_rejects_output_overwriting_input_or_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "patients.json"
+            input_path.write_text(json.dumps(self.sample_patient()), encoding="utf-8")
+            original = input_path.read_bytes()
+            for output_path in (input_path, Path(directory) / "alias.json"):
+                if output_path != input_path:
+                    output_path.symlink_to(input_path)
+                with patch("sys.argv", ["predict", "--input-json", str(input_path),
+                                        "--output-json", str(output_path)]):
+                    with self.assertRaisesRegex(SystemExit, "output path must differ"):
+                        main()
+                self.assertEqual(input_path.read_bytes(), original)
+            with patch("sys.argv", ["predict", "--input-json", str(input_path),
+                                    "--output-json", str(MODEL_PATH)]):
+                with self.assertRaisesRegex(SystemExit, "output path must differ"):
+                    main()
+
     @staticmethod
     def sample_patient() -> dict:
         return {

@@ -33,6 +33,8 @@ def feature_fingerprints(features: pd.DataFrame) -> pd.Series:
 
 def evaluate_external(data_path: Path, model_path: Path, output_path: Path) -> dict:
     """Score labeled, unseen rows and account for training-profile overlap."""
+    if output_path.resolve() in {data_path.resolve(), model_path.resolve()}:
+        raise ValueError("Evaluation output path must differ from data and model paths.")
     pipeline = joblib.load(model_path)
     if not hasattr(pipeline, "training_feature_hashes_"):
         raise ValueError("Model lacks training fingerprints; retrain it before external evaluation.")

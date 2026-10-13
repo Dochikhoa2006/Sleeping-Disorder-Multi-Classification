@@ -11,6 +11,17 @@ from src.train import DEFAULT_DATA_PATH, DEFAULT_MODEL_PATH, split_training_hold
 
 
 class ExternalEvaluationTests(unittest.TestCase):
+    def test_output_cannot_overwrite_data_or_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data_path = Path(directory) / "external.csv"
+            data_path.write_text("Sleep Disorder\nHealthy\n", encoding="utf-8")
+            original = data_path.read_bytes()
+            with self.assertRaisesRegex(ValueError, "output path must differ"):
+                evaluate_external(data_path, DEFAULT_MODEL_PATH, data_path)
+            self.assertEqual(data_path.read_bytes(), original)
+            with self.assertRaisesRegex(ValueError, "output path must differ"):
+                evaluate_external(data_path, DEFAULT_MODEL_PATH, DEFAULT_MODEL_PATH)
+
     @staticmethod
     def new_patient(age: int) -> dict:
         return {
