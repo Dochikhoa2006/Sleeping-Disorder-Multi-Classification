@@ -214,6 +214,19 @@ numbers; blood pressure uses `systolic/diastolic` format. The command reports
 the CSV row number for invalid records and does not write an output file until
 all rows have passed validation. The input and output paths must differ.
 
+### Validate inputs without predicting
+
+Check JSON or CSV patient records before running inference:
+
+```bash
+python -m src.predict --input-json patients.json --validate-only
+python -m src.predict --input-csv patients.csv --validate-only
+```
+
+This mode applies the same input validation as prediction and prints the number
+of valid records. It requires no model file, stops on invalid records, and
+cannot be combined with `--output-json` or `--output-csv`.
+
 Only load `.joblib` files from sources you trust. Joblib artifacts can execute
 code when loaded.
 

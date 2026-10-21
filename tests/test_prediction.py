@@ -1,6 +1,8 @@
 import unittest
 import csv
 import json
+from contextlib import redirect_stdout
+from io import StringIO
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -56,6 +58,51 @@ class PredictionTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "Patient 2: 'Age'"):
             predict_many([self.sample_patient(), invalid], MODEL_PATH)
+
+    def test_validate_only_accepts_json_and_csv_without_loading_a_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            patients = [self.sample_patient(), {**self.sample_patient(), "Age": 55}]
+            json_path = root / "patients.json"
+            json_path.write_text(json.dumps(patients), encoding="utf-8")
+            csv_path = root / "patients.csv"
+            with csv_path.open("w", encoding="utf-8", newline="") as csv_file:
+                writer = csv.DictWriter(csv_file, fieldnames=list(patients[0]))
+                writer.writeheader()
+                writer.writerows(patients)
+
+            for option, path in (("--input-json", json_path), ("--input-csv", csv_path)):
+                with self.subTest(option=option):
+                    output = StringIO()
+                    with patch("sys.argv", ["predict", option, str(path), "--validate-only",
+                                            "--model", str(root / "missing.joblib")]), \
+                            patch("src.predict.joblib.load") as load_model, redirect_stdout(output):
+                        main()
+                    load_model.assert_not_called()
+                    self.assertEqual(output.getvalue(), "Validated 2 patient record(s).\n")
+
+    def test_validate_only_reports_invalid_record_without_loading_a_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "patients.json"
+            path.write_text(json.dumps([
+                self.sample_patient(), {**self.sample_patient(), "Age": 0},
+            ]), encoding="utf-8")
+            with patch("sys.argv", ["predict", "--input-json", str(path), "--validate-only"]), \
+                    patch("src.predict.joblib.load") as load_model:
+                with self.assertRaisesRegex(SystemExit, "Patient 2: 'Age'"):
+                    main()
+            load_model.assert_not_called()
+
+    def test_validate_only_rejects_output_options_without_creating_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "output"
+            for option in ("--output-json", "--output-csv"):
+                with self.subTest(option=option), patch("sys.argv", [
+                    "predict", "--validate-only", option, str(output_path),
+                ]):
+                    with self.assertRaisesRegex(SystemExit, "cannot be combined with output"):
+                        main()
+                self.assertFalse(output_path.exists())
 
     def test_cli_writes_batch_json_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

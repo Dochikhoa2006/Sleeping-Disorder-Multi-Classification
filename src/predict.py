@@ -158,10 +158,8 @@ def predict(patient: dict[str, Any], model_path: Path = DEFAULT_MODEL_PATH) -> s
     return predict_many([patient], model_path)[0]
 
 
-def predict_many(
-    patients: list[dict[str, Any]], model_path: Path = DEFAULT_MODEL_PATH
-) -> list[str]:
-    """Validate all records, then run one batch through the saved pipeline."""
+def validate_patients(patients: list[dict[str, Any]]) -> None:
+    """Validate a batch without loading a model or running predictions."""
     if not patients:
         raise ValueError("At least one patient is required.")
     for index, patient in enumerate(patients, start=1):
@@ -170,6 +168,12 @@ def predict_many(
         except (ValueError, TypeError) as error:
             raise ValueError(f"Patient {index}: {error}") from error
 
+
+def predict_many(
+    patients: list[dict[str, Any]], model_path: Path = DEFAULT_MODEL_PATH
+) -> list[str]:
+    """Validate all records, then run one batch through the saved pipeline."""
+    validate_patients(patients)
     pipeline = joblib.load(model_path)
     patient_frame = pd.DataFrame(
         [{key: patient[key] for key in RAW_FEATURES} for patient in patients]
@@ -200,11 +204,17 @@ def parse_args() -> argparse.Namespace:
         help="Write input CSV rows with a predicted class column.",
     )
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
+    parser.add_argument(
+        "--validate-only", action="store_true",
+        help="Validate input records without loading a model or predicting.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     arguments = parse_args()
+    if arguments.validate_only and (arguments.output_json or arguments.output_csv):
+        raise SystemExit("Error: --validate-only cannot be combined with output options.")
     if arguments.output_json and not arguments.input_json:
         raise SystemExit("Error: --output-json requires --input-json.")
     if arguments.output_csv and not arguments.input_csv:
@@ -224,6 +234,10 @@ def main() -> None:
                 if arguments.input_json else prompt_for_patient()
             )
             patients = patient_data if isinstance(patient_data, list) else [patient_data]
+        if arguments.validate_only:
+            validate_patients(patients)
+            print(f"Validated {len(patients)} patient record(s).")
+            return
         predictions = predict_many(patients, arguments.model)
         if arguments.output_json:
             arguments.output_json.write_text(
