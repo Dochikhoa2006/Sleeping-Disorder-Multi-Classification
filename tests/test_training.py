@@ -1,13 +1,60 @@
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
 from src.preprocessing import RAW_FEATURES, build_pipeline
-from src.train import make_feature_groups, split_training_holdout
+from src.train import load_training_data, make_feature_groups, split_training_holdout, train
 
 
 class TrainingTests(unittest.TestCase):
+    def test_loading_preserves_supported_labels_and_maps_missing_to_healthy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "training.csv"
+            path.write_text(
+                "Age,Sleep Disorder\n30,Healthy\n31,Insomnia\n32,Sleep Apnea\n33,\n",
+                encoding="utf-8",
+            )
+            features, target = load_training_data(path)
+
+        self.assertEqual(target.tolist(), ["Healthy", "Insomnia", "Sleep Apnea", "Healthy"])
+        self.assertEqual(features.columns.tolist(), ["Age"])
+        self.assertEqual(features["Age"].tolist(), [30, 31, 32, 33])
+
+    def test_invalid_training_labels_fail_before_model_selection_or_writing(self) -> None:
+        for label in ("Insomina", "insomnia", " ", "123"):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                path = root / "training.csv"
+                path.write_text(f"Age,Sleep Disorder\n30,Healthy\n31,{label}\n", encoding="utf-8")
+                outputs = [root / name for name in ("model.joblib", "plot.png", "report.json")]
+                for output in outputs:
+                    output.write_bytes(b"existing artifact")
+
+                with patch("src.train.compare_models") as compare:
+                    with self.assertRaisesRegex(ValueError, "Unsupported 'Sleep Disorder' label"):
+                        train(path, *outputs)
+                compare.assert_not_called()
+                for output in outputs:
+                    self.assertEqual(output.read_bytes(), b"existing artifact")
+
+    def test_loading_rejects_empty_training_data(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "training.csv"
+            path.write_text("Age,Sleep Disorder\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "at least one row"):
+                load_training_data(path)
+
+    def test_loading_requires_target_column(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "training.csv"
+            path.write_text("Age\n30\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "must contain a 'Sleep Disorder' column"):
+                load_training_data(path)
+
     def test_holdout_keeps_duplicate_profiles_together(self) -> None:
         base = {
             "Gender": "Female", "Age": 30, "Occupation": "Engineer",

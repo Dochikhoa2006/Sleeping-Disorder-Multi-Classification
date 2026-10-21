@@ -131,6 +131,11 @@ This command compares the three candidate models, then regenerates:
 Optional paths can be supplied with `--data`, `--model-output`,
 `--report-output`, and `--evaluation-output`.
 
+Training requires at least one row and a `Sleep Disorder` column. Non-missing
+labels must be exactly `Healthy`, `Insomnia`, or `Sleep Apnea`; unsupported
+labels (including typos) are rejected before model selection or artifact
+writes. Missing labels continue to be interpreted as `Healthy`.
+
 ## Evaluate on labeled data
 
 To assess the saved model on another labeled CSV, include all input feature

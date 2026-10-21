@@ -34,14 +34,24 @@ DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "Sleep_health_and_lifestyle_dataset.
 DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
 DEFAULT_REPORT_PATH = PROJECT_ROOT / "reports" / "model_comparison.png"
 DEFAULT_EVALUATION_PATH = PROJECT_ROOT / "reports" / "holdout_evaluation.json"
+TRAINING_LABELS = ("Healthy", "Insomnia", "Sleep Apnea")
 
 
 def load_training_data(path: Path) -> tuple[pd.DataFrame, pd.Series]:
     dataset = pd.read_csv(path)
     if TARGET_COLUMN not in dataset.columns:
         raise ValueError(f"Dataset must contain a '{TARGET_COLUMN}' column.")
+    if dataset.empty:
+        raise ValueError("Training CSV must contain at least one row.")
 
     target = dataset[TARGET_COLUMN].fillna("Healthy")
+    invalid = ~target.isin(TRAINING_LABELS)
+    if invalid.any():
+        invalid_labels = ", ".join(repr(value) for value in target.loc[invalid].unique())
+        raise ValueError(
+            f"Unsupported '{TARGET_COLUMN}' label(s): {invalid_labels}. "
+            f"Expected one of: {', '.join(TRAINING_LABELS)}."
+        )
     features = dataset.drop(columns=[TARGET_COLUMN])
     return features, target
 
