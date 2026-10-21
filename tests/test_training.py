@@ -4,13 +4,69 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
+from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 
 from src.preprocessing import RAW_FEATURES, build_pipeline
-from src.train import load_training_data, make_feature_groups, split_training_holdout, train
+from src.train import compare_models, load_training_data, make_feature_groups, split_training_holdout, train
 
 
 class TrainingTests(unittest.TestCase):
+    @staticmethod
+    def comparison_data() -> tuple[pd.DataFrame, pd.Series]:
+        base = {
+            "Gender": "Female", "Occupation": "Engineer",
+            "Sleep Duration": 7.5, "Quality of Sleep": 8,
+            "Physical Activity Level": 45, "Stress Level": 4,
+            "BMI Category": "Normal", "Blood Pressure": "120/80",
+            "Heart Rate": 68, "Daily Steps": 8_000,
+        }
+        features = pd.DataFrame([{**base, "Age": 25 + index} for index in range(30)])
+        return features, pd.Series(["Healthy", "Insomnia", "Sleep Apnea"] * 10)
+
+    def test_model_comparison_stops_on_a_failed_fold(self) -> None:
+        class FailsOnceClassifier(DummyClassifier):
+            fit_calls = 0
+
+            def fit(self, X, y, sample_weight=None):
+                type(self).fit_calls += 1
+                if type(self).fit_calls == 1:
+                    raise ValueError("Simulated fold fit failure")
+                return super().fit(X, y, sample_weight=sample_weight)
+
+        features, target = self.comparison_data()
+        with patch("src.train.candidate_models", return_value={"Failing model": FailsOnceClassifier()}):
+            with self.assertRaisesRegex(ValueError, "Simulated fold fit failure"):
+                compare_models(features, target)
+        self.assertEqual(FailsOnceClassifier.fit_calls, 1)
+
+    def test_model_comparison_rejects_non_finite_fold_scores(self) -> None:
+        features, target = self.comparison_data()
+        for metric in ("test_f1_macro", "test_accuracy"):
+            for invalid in (float("nan"), float("inf"), float("-inf")):
+                with self.subTest(metric=metric, invalid=invalid):
+                    scores = {"test_f1_macro": [0.8] * 5, "test_accuracy": [0.9] * 5}
+                    scores[metric][2] = invalid
+                    with patch("src.train.candidate_models", return_value={"Broken model": DummyClassifier()}), \
+                            patch("src.train.cross_validate", return_value=scores):
+                        with self.assertRaisesRegex(ValueError, f"Broken model.*non-finite.*{metric}"):
+                            compare_models(features, target)
+
+    def test_model_comparison_selects_best_valid_candidate(self) -> None:
+        features, target = self.comparison_data()
+        models = {"Lower F1": DummyClassifier(), "Best": DummyClassifier()}
+        scores = [
+            {"test_f1_macro": [0.7] * 5, "test_accuracy": [0.95] * 5},
+            {"test_f1_macro": [0.8] * 5, "test_accuracy": [0.9] * 5},
+        ]
+        with patch("src.train.candidate_models", return_value=models), \
+                patch("src.train.cross_validate", side_effect=scores):
+            results, best = compare_models(features, target)
+        self.assertEqual(best, "Best")
+        self.assertAlmostEqual(results[best]["f1_macro"], 0.8)
+        self.assertAlmostEqual(results[best]["accuracy"], 0.9)
+        self.assertAlmostEqual(results[best]["accuracy_fold_std"], 0.0)
+
     def test_loading_preserves_supported_labels_and_maps_missing_to_healthy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "training.csv"

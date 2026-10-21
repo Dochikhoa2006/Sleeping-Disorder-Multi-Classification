@@ -136,6 +136,10 @@ labels must be exactly `Healthy`, `Insomnia`, or `Sleep Apnea`; unsupported
 labels (including typos) are rejected before model selection or artifact
 writes. Missing labels continue to be interpreted as `Healthy`.
 
+Model comparison stops if a cross-validation fold fails or returns a
+non-finite score, so incomplete validation results cannot select the saved
+model. Existing artifacts are not updated in that case.
+
 ## Evaluate on labeled data
 
 To assess the saved model on another labeled CSV, include all input feature

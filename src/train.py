@@ -117,7 +117,11 @@ def compare_models(
             cv=cross_validation,
             scoring={"f1_macro": "f1_macro", "accuracy": "accuracy"},
             n_jobs=1,
+            error_score="raise",
         )
+        for metric in ("test_f1_macro", "test_accuracy"):
+            if not np.isfinite(scores[metric]).all():
+                raise ValueError(f"{name} produced non-finite cross-validation scores for {metric}.")
         accuracy = scores["test_accuracy"]
         results[name] = {
             "f1_macro": float(np.mean(scores["test_f1_macro"])),
