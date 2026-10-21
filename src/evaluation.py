@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from io import BytesIO
 from pathlib import Path
 
 import joblib
@@ -35,10 +37,12 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path) -> d
     """Score labeled, unseen rows and account for training-profile overlap."""
     if output_path.resolve() in {data_path.resolve(), model_path.resolve()}:
         raise ValueError("Evaluation output path must differ from data and model paths.")
-    pipeline = joblib.load(model_path)
+    model_bytes = model_path.read_bytes()
+    pipeline = joblib.load(BytesIO(model_bytes))
     if not hasattr(pipeline, "training_feature_hashes_"):
         raise ValueError("Model lacks training fingerprints; retrain it before external evaluation.")
-    dataset = pd.read_csv(data_path)
+    dataset_bytes = data_path.read_bytes()
+    dataset = pd.read_csv(BytesIO(dataset_bytes))
     if dataset.empty:
         raise ValueError("Evaluation CSV must contain at least one row.")
     if TARGET_COLUMN not in dataset:
@@ -58,6 +62,8 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path) -> d
     predictions = [str(value) for value in pipeline.predict(features.loc[unseen])]
     report = {
         "model_name": pipeline.model_name_,
+        "dataset_sha256": hashlib.sha256(dataset_bytes).hexdigest(),
+        "model_sha256": hashlib.sha256(model_bytes).hexdigest(),
         "total_rows": len(dataset),
         "training_overlap_rows": int(overlap.sum()),
         "evaluated_rows": int(unseen.sum()),

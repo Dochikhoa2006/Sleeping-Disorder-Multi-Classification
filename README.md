@@ -147,11 +147,13 @@ python -m src.evaluate --data external_patients.csv --output external_evaluation
 ```
 
 The JSON report contains accuracy, macro F1, per-class precision and recall,
-and a confusion matrix. It also counts rows whose engineered features match a
-profile used to fit the model. Those rows are excluded from the metrics; the
-command fails if no unseen profiles remain. Training fingerprints are stored
-in the model artifact. As with the training report, these metrics are only as
-representative as the supplied dataset.
+and a confusion matrix. The `dataset_sha256` and `model_sha256` fields identify
+the exact CSV and model file contents used, so reports can be traced to their
+inputs even when filenames are reused. It also counts rows whose engineered
+features match a profile used to fit the model. Those rows are excluded from
+the metrics; the command fails if no unseen profiles remain. Training
+fingerprints are stored in the model artifact. As with the training report,
+these metrics are only as representative as the supplied dataset.
 
 ## Predict
 

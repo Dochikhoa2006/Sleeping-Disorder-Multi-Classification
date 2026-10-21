@@ -1,3 +1,5 @@
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -53,6 +55,36 @@ class ExternalEvaluationTests(unittest.TestCase):
             self.assertEqual(report["evaluated_rows"], 1)
             self.assertEqual(report["accuracy"], 1.0)
             self.assertTrue(output_path.exists())
+            self.assertEqual(report["dataset_sha256"], hashlib.sha256(data_path.read_bytes()).hexdigest())
+            self.assertEqual(report["model_sha256"], hashlib.sha256(DEFAULT_MODEL_PATH.read_bytes()).hexdigest())
+            self.assertEqual(json.loads(output_path.read_text(encoding="utf-8")), report)
+
+    def test_report_fingerprints_change_when_input_files_change(self) -> None:
+        pipeline = joblib.load(DEFAULT_MODEL_PATH)
+        pipeline.training_feature_hashes_ = set()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data_path = root / "external.csv"
+            model_path = root / "model.joblib"
+            output_path = root / "evaluation.json"
+            row = self.new_patient(97)
+            row[TARGET_COLUMN] = predict(row, DEFAULT_MODEL_PATH)
+            pd.DataFrame([row]).to_csv(data_path, index=False)
+            joblib.dump(pipeline, model_path)
+            first = evaluate_external(data_path, model_path, output_path)
+
+            # A different CSV serialization preserves predictions but changes provenance.
+            with data_path.open("a", encoding="utf-8") as data_file:
+                data_file.write("\n")
+            pipeline.model_name_ = "Updated model artifact"
+            joblib.dump(pipeline, model_path)
+            second = evaluate_external(data_path, model_path, output_path)
+
+            self.assertNotEqual(first["dataset_sha256"], second["dataset_sha256"])
+            self.assertNotEqual(first["model_sha256"], second["model_sha256"])
+            self.assertEqual(first["accuracy"], second["accuracy"])
+            self.assertEqual(first["confusion_matrix"], second["confusion_matrix"])
+            self.assertEqual(json.loads(output_path.read_text(encoding="utf-8")), second)
 
     def test_external_report_rejects_only_overlapping_rows(self) -> None:
         row = self.new_patient(96)
