@@ -57,6 +57,9 @@ These are internal dataset estimates, not results from an external test set.
 sleep-disorder-classification/
 ├── data/
 │   └── README.md
+├── examples/
+│   ├── patient.json
+│   └── patients.csv
 ├── models/
 │   └── sleep_disorder_pipeline.joblib
 ├── reports/
@@ -95,7 +98,7 @@ values are interpreted as `Healthy`.
 
 The dataset is published separately under **CC0: Public Domain**. It is not
 covered by this repository's MIT License. Download instructions are available
-in [`data/README.md`](data/README.md); CSV files are intentionally excluded
+in [`data/README.md`](data/README.md); the dataset CSV is intentionally excluded
 from Git.
 
 ## Installation
@@ -103,8 +106,8 @@ from Git.
 Python 3.11 or newer is recommended.
 
 ```bash
-git clone https://github.com/Dochikhoa2006/Sleeping-Disorder-Analysis.git
-cd Sleeping-Disorder-Analysis
+git clone https://github.com/Dochikhoa2006/Sleeping-Disorder-Multi-Classification.git
+cd Sleeping-Disorder-Multi-Classification
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -179,6 +182,17 @@ fingerprints are stored in the model artifact. As with the training report,
 these metrics are only as representative as the supplied dataset.
 
 ## Predict
+
+Try the included synthetic patient examples with the saved model:
+
+```bash
+python -m src.predict --input-json examples/patient.json
+python -m src.predict --input-csv examples/patients.csv --output-csv predictions.csv
+```
+
+The CSV example includes a `Record ID` column that is preserved in the exported
+predictions. These examples also work with `--validate-only` (omit the output
+option) to check their format without loading a model.
 
 Run the interactive predictor:
 

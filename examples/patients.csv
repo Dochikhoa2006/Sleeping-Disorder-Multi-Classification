@@ -1,0 +1,3 @@
+Record ID,Gender,Age,Occupation,Sleep Duration,Quality of Sleep,Physical Activity Level,Stress Level,BMI Category,Blood Pressure,Heart Rate,Daily Steps
+sample-001,Male,31,Software Engineer,7.2,8,60,4,Normal,120/80,70,8000
+sample-002,Female,55,Teacher,5.5,5,30,7,Overweight,135/85,76,5000
