@@ -263,8 +263,9 @@ code when loaded.
 python -m unittest discover -s tests -v
 ```
 
-GitHub Actions runs the same test command with Python 3.11 for every push and
-pull request.
+GitHub Actions runs the same test command with Python 3.11, 3.12, and 3.13 for
+every push and pull request. Each version runs independently, so a failure on
+one version does not cancel the other checks.
 
 ## Docker
 
