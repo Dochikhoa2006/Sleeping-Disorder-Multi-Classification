@@ -67,11 +67,13 @@ sleep-disorder-classification/
 │   ├── predict.py
 │   ├── evaluate.py
 │   ├── evaluation.py
+│   ├── model_info.py
 │   ├── output.py
 │   └── preprocessing.py
 ├── tests/
 │   ├── test_prediction.py
 │   ├── test_evaluation.py
+│   ├── test_model_info.py
 │   ├── test_output.py
 │   ├── test_preprocessing.py
 │   └── test_training.py
@@ -141,6 +143,21 @@ writes. Missing labels continue to be interpreted as `Healthy`.
 Model comparison stops if a cross-validation fold fails or returns a
 non-finite score, so incomplete validation results cannot select the saved
 model. Existing artifacts are not updated in that case.
+
+## Inspect the saved model
+
+View the selected model, class labels, training metadata, cross-validation
+results, and SHA-256 fingerprint without supplying patient data:
+
+```bash
+python -m src.model_info
+python -m src.model_info --model models/sleep_disorder_pipeline.joblib
+```
+
+The command prints JSON to standard output, which can be redirected to a file.
+Training metadata and validation results are `null` for classifiers that do
+not store them. Only inspect trusted Joblib files, as loading them can execute
+code.
 
 ## Evaluate on labeled data
 
