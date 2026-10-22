@@ -26,9 +26,18 @@ CSV_NUMERIC_FEATURES = (
 PREDICTION_COLUMN = "Predicted Sleep Disorder"
 
 
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    patient = {}
+    for key, value in pairs:
+        if key in patient:
+            raise ValueError(f"Duplicate JSON field: {key!r}.")
+        patient[key] = value
+    return patient
+
+
 def load_patient_json(path: Path) -> dict[str, Any] | list[dict[str, Any]]:
     with path.open(encoding="utf-8") as input_file:
-        patient = json.load(input_file)
+        patient = json.load(input_file, object_pairs_hook=_unique_json_object)
     if isinstance(patient, list):
         if not patient:
             raise ValueError("Patient JSON array must contain at least one object.")

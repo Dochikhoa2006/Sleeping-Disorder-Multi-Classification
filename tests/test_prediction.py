@@ -178,6 +178,39 @@ class PredictionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     load_patient_json(input_path)
 
+    def test_json_rejects_duplicate_fields_in_objects_and_batches(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "patients.json"
+            for contents in (
+                '{"Age": 0, "Age": 31}',
+                '[{"Age": 30}, {"Age": 0, "Age": 31}]',
+                '{"Age": 31, "Age": 31}',
+                '{"Age": 0, "\\u0041ge": 31}',
+            ):
+                with self.subTest(contents=contents):
+                    input_path.write_text(contents, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "Duplicate JSON field: 'Age'"):
+                        load_patient_json(input_path)
+
+    def test_duplicate_json_fields_stop_cli_before_model_loading_or_output(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            input_path = root / "patients.json"
+            patient = json.dumps(self.sample_patient())
+            input_path.write_text(patient[:-1] + ', "Age": 55}', encoding="utf-8")
+            output_path = root / "predictions.json"
+            output_path.write_bytes(b"existing predictions")
+            for options in (
+                ["--output-json", str(output_path)], ["--validate-only"],
+            ):
+                with self.subTest(options=options), patch("sys.argv", [
+                    "predict", "--input-json", str(input_path), *options,
+                ]), patch("src.predict.joblib.load") as load_model:
+                    with self.assertRaisesRegex(SystemExit, "Duplicate JSON field: 'Age'"):
+                        main()
+                load_model.assert_not_called()
+                self.assertEqual(output_path.read_bytes(), b"existing predictions")
+
     def test_saved_pipeline_matches_pinned_sklearn_version(self) -> None:
         pipeline = joblib.load(MODEL_PATH)
         expected_model = max(

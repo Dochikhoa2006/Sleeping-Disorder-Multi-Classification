@@ -226,7 +226,9 @@ python -m src.predict --input-json patient.json
 
 For several patients, supply a JSON array of objects with the same fields.
 Predictions are returned in input order, and invalid records are identified by
-their position. To save machine-readable results:
+their position. Duplicate JSON field names are rejected, including when their
+values match, so repeated fields cannot silently overwrite patient data.
+To save machine-readable results:
 
 ```bash
 python -m src.predict --input-json patients.json --output-json predictions.json
