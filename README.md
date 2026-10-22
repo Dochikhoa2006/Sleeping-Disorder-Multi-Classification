@@ -67,10 +67,12 @@ sleep-disorder-classification/
 │   ├── predict.py
 │   ├── evaluate.py
 │   ├── evaluation.py
+│   ├── output.py
 │   └── preprocessing.py
 ├── tests/
 │   ├── test_prediction.py
 │   ├── test_evaluation.py
+│   ├── test_output.py
 │   ├── test_preprocessing.py
 │   └── test_training.py
 ├── .github/workflows/ci.yml
@@ -217,6 +219,10 @@ The output adds a `Predicted Sleep Disorder` column. Numeric fields must contain
 numbers; blood pressure uses `systolic/diastolic` format. The command reports
 the CSV row number for invalid records and does not write an output file until
 all rows have passed validation. The input and output paths must differ.
+
+JSON and CSV prediction exports are written to a temporary file beside the
+destination, then replace it after a successful write. If writing fails, any
+existing export is preserved and the temporary file is removed.
 
 ### Validate inputs without predicting
 

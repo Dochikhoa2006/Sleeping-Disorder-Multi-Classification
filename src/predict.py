@@ -15,6 +15,7 @@ import joblib
 import pandas as pd
 
 from src.preprocessing import RAW_FEATURES
+from src.output import atomic_text_output
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
@@ -80,7 +81,7 @@ def load_patient_csv(path: Path) -> tuple[list[str], list[dict[str, str]], list[
 def write_prediction_csv(
     path: Path, columns: list[str], rows: list[dict[str, str]], predictions: list[str]
 ) -> None:
-    with path.open("w", encoding="utf-8", newline="") as output_file:
+    with atomic_text_output(path, newline="") as output_file:
         writer = csv.DictWriter(output_file, fieldnames=[*columns, PREDICTION_COLUMN])
         writer.writeheader()
         for row, prediction in zip(rows, predictions, strict=True):
@@ -240,9 +241,8 @@ def main() -> None:
             return
         predictions = predict_many(patients, arguments.model)
         if arguments.output_json:
-            arguments.output_json.write_text(
-                json.dumps(predictions, indent=2) + "\n", encoding="utf-8"
-            )
+            with atomic_text_output(arguments.output_json) as output_file:
+                output_file.write(json.dumps(predictions, indent=2) + "\n")
         if arguments.output_csv:
             write_prediction_csv(arguments.output_csv, columns, original_rows, predictions)
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
