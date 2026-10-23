@@ -16,6 +16,21 @@ from src.train import DEFAULT_MODEL_PATH
 
 
 class ExternalEvaluationTests(unittest.TestCase):
+    def test_report_counts_equivalent_unseen_profiles_without_dropping_rows(self) -> None:
+        first = {**self.new_patient(97), TARGET_COLUMN: "Healthy", "Person ID": 1}
+        equivalent = {**first, "Person ID": 2, "BMI Category": "Normal Weight",
+                      "Blood Pressure": " 120 / 80 "}
+        different = {**self.new_patient(98), TARGET_COLUMN: "Healthy", "Person ID": 3}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data_path = root / "patients.csv"
+            pd.DataFrame([first, equivalent, different]).to_csv(data_path, index=False)
+            report = evaluate_external(data_path, DEFAULT_MODEL_PATH, root / "report.json")
+            self.assertEqual(report["evaluated_rows"], 3)
+            self.assertEqual(report["unique_evaluated_profiles"], 2)
+            self.assertEqual(report["duplicate_evaluated_rows"], 1)
+            self.assertEqual(sum(sum(row) for row in report["confusion_matrix"]), 3)
+
     def test_gzip_evaluation_matches_plain_csv_and_hashes_original_file(self) -> None:
         row = {**self.new_patient(97), TARGET_COLUMN: "Healthy"}
         with tempfile.TemporaryDirectory() as directory:

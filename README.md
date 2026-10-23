@@ -200,6 +200,11 @@ The `class_row_counts` section breaks down total, training-overlap, and
 evaluated rows for every model class, including classes with zero rows. This
 shows whether excluding training profiles leaves a class underrepresented.
 
+The report also includes `unique_evaluated_profiles` and
+`duplicate_evaluated_rows`, based on engineered model features. Equivalent
+profiles with different IDs or formatting count as repeats. Metrics still
+include every evaluated row; these counts make repeated profiles visible.
+
 ## Predict
 
 Try the included synthetic patient examples with the saved model:

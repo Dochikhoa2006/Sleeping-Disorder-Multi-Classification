@@ -69,6 +69,8 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path) -> d
         "total_rows": len(dataset),
         "training_overlap_rows": int(overlap.sum()),
         "evaluated_rows": int(unseen.sum()),
+        "unique_evaluated_profiles": int(fingerprints.loc[unseen].nunique()),
+        "duplicate_evaluated_rows": int(fingerprints.loc[unseen].duplicated().sum()),
         "class_row_counts": {
             label: {
                 "total_rows": int(target.eq(label).sum()),
