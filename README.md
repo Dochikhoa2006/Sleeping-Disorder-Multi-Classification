@@ -162,6 +162,16 @@ Training metadata and validation results are `null` for classifiers that do
 not store them. Only inspect trusted Joblib files, as loading them can execute
 code.
 
+For programmatic inspection, retrieve the transformed feature names from the
+saved pipeline's preprocessing steps:
+
+```python
+import joblib
+
+pipeline = joblib.load("models/sleep_disorder_pipeline.joblib")
+feature_names = pipeline[:-1].get_feature_names_out()
+```
+
 ## Evaluate on labeled data
 
 To assess the saved model on another labeled CSV, include all input feature

@@ -1,8 +1,10 @@
 import unittest
 
 import pandas as pd
+import joblib
 
 from src.preprocessing import SleepFeatureEngineer
+from src.predict import DEFAULT_MODEL_PATH
 
 
 def patient_frame(blood_pressure: str = "120/80") -> pd.DataFrame:
@@ -27,6 +29,23 @@ def patient_frame(blood_pressure: str = "120/80") -> pd.DataFrame:
 
 
 class SleepFeatureEngineerTests(unittest.TestCase):
+    def test_engineered_feature_names_match_transformed_columns(self) -> None:
+        transformer = SleepFeatureEngineer()
+        frame = patient_frame()
+        transformed = transformer.fit_transform(frame)
+        self.assertEqual(transformer.get_feature_names_out().tolist(), transformed.columns.tolist())
+        self.assertEqual(transformer.get_feature_names_out(frame.columns).tolist(), transformed.columns.tolist())
+        self.assertNotIn("Person ID", transformer.get_feature_names_out())
+
+    def test_saved_preprocessing_pipeline_exposes_names_for_every_output(self) -> None:
+        preprocessing = joblib.load(DEFAULT_MODEL_PATH)[:-1]
+        transformed = preprocessing.transform(patient_frame())
+        names = preprocessing.get_feature_names_out().tolist()
+        self.assertEqual(len(names), transformed.shape[1])
+        self.assertEqual(len(names), len(set(names)))
+        self.assertIn("numeric__Systolic Blood Pressure", names)
+        self.assertIn("categorical__BMI Category_Normal", names)
+
     def test_drops_identifier_and_parses_blood_pressure(self) -> None:
         transformed = SleepFeatureEngineer().fit_transform(patient_frame())
 

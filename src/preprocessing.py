@@ -117,6 +117,10 @@ class SleepFeatureEngineer(BaseEstimator, TransformerMixin):
 
         return frame[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
 
+    def get_feature_names_out(self, input_features: Any = None) -> np.ndarray:
+        """Expose engineered column names to downstream sklearn transformers."""
+        return np.asarray(NUMERIC_FEATURES + CATEGORICAL_FEATURES, dtype=object)
+
     @staticmethod
     def _validate_input(X: Any) -> pd.DataFrame:
         if not isinstance(X, pd.DataFrame):
