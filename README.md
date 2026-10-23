@@ -172,6 +172,9 @@ columns and a `Sleep Disorder` column with explicit `Healthy`, `Insomnia`, or
 python -m src.evaluate --data external_patients.csv --output external_evaluation.json
 ```
 
+Gzip-compressed CSVs are also accepted with `--data external_patients.csv.gz`.
+The dataset fingerprint identifies the original compressed file contents.
+
 The JSON report contains accuracy, macro F1, per-class precision and recall,
 and a confusion matrix. The `dataset_sha256` and `model_sha256` fields identify
 the exact CSV and model file contents used, so reports can be traced to their

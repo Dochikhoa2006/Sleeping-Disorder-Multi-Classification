@@ -11,7 +11,7 @@ from src.predict import DEFAULT_MODEL_PATH
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate a model on labeled unseen profiles.")
-    parser.add_argument("--data", type=Path, required=True, help="Labeled CSV to evaluate.")
+    parser.add_argument("--data", type=Path, required=True, help="Labeled CSV or gzip-compressed CSV (.gz) to evaluate.")
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
     parser.add_argument("--output", type=Path, required=True, help="JSON report destination.")
     arguments = parser.parse_args()

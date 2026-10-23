@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 from io import BytesIO
@@ -42,7 +43,8 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path) -> d
     if not hasattr(pipeline, "training_feature_hashes_"):
         raise ValueError("Model lacks training fingerprints; retrain it before external evaluation.")
     dataset_bytes = data_path.read_bytes()
-    dataset = pd.read_csv(BytesIO(dataset_bytes))
+    csv_bytes = gzip.decompress(dataset_bytes) if data_path.suffix.lower() == ".gz" else dataset_bytes
+    dataset = pd.read_csv(BytesIO(csv_bytes))
     if dataset.empty:
         raise ValueError("Evaluation CSV must contain at least one row.")
     if TARGET_COLUMN not in dataset:

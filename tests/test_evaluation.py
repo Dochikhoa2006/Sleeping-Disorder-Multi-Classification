@@ -1,3 +1,4 @@
+import gzip
 import hashlib
 import json
 import tempfile
@@ -15,6 +16,21 @@ from src.train import DEFAULT_MODEL_PATH
 
 
 class ExternalEvaluationTests(unittest.TestCase):
+    def test_gzip_evaluation_matches_plain_csv_and_hashes_original_file(self) -> None:
+        row = {**self.new_patient(97), TARGET_COLUMN: "Healthy"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plain_path = root / "patients.csv"
+            gzip_path = root / "patients.csv.gz"
+            pd.DataFrame([row]).to_csv(plain_path, index=False)
+            gzip_path.write_bytes(gzip.compress(plain_path.read_bytes()))
+            plain = evaluate_external(plain_path, DEFAULT_MODEL_PATH, root / "plain.json")
+            compressed = evaluate_external(gzip_path, DEFAULT_MODEL_PATH, root / "gzip.json")
+            for key in ("accuracy", "macro_f1", "confusion_matrix", "class_row_counts", "evaluated_rows"):
+                self.assertEqual(plain[key], compressed[key])
+            self.assertEqual(compressed["dataset_sha256"], hashlib.sha256(gzip_path.read_bytes()).hexdigest())
+            self.assertNotEqual(plain["dataset_sha256"], compressed["dataset_sha256"])
+
     def test_report_accounts_for_class_coverage_after_overlap_filtering(self) -> None:
         pipeline = joblib.load(DEFAULT_MODEL_PATH)
         overlapping = {**self.new_patient(96), TARGET_COLUMN: "Insomnia"}
