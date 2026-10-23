@@ -137,6 +137,8 @@ This command compares the three candidate models, then regenerates:
 
 Optional paths can be supplied with `--data`, `--model-output`,
 `--report-output`, and `--evaluation-output`.
+All four paths must differ, including when symlinks resolve to the same file.
+Path collisions are rejected before loading data or updating any artifacts.
 
 Training requires at least one row and a `Sleep Disorder` column. Non-missing
 labels must be exactly `Healthy`, `Insomnia`, or `Sleep Apnea`; unsupported

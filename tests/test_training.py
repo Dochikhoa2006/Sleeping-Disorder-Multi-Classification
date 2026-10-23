@@ -1,4 +1,5 @@
 import tempfile
+from itertools import combinations
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -12,6 +13,27 @@ from src.train import compare_models, load_training_data, make_feature_groups, s
 
 
 class TrainingTests(unittest.TestCase):
+    def test_training_rejects_all_output_path_collisions_before_reading_data(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = [root / name for name in ("data.csv", "model.joblib", "plot.png", "evaluation.json")]
+            for path in paths:
+                path.write_bytes(b"existing file")
+            for first, second in combinations(range(4), 2):
+                with self.subTest(first=first, second=second):
+                    conflicting = paths.copy()
+                    conflicting[second] = conflicting[first]
+                    with patch("src.train.load_training_data") as load_data:
+                        with self.assertRaisesRegex(ValueError, "paths must all differ"):
+                            train(*conflicting)
+                    load_data.assert_not_called()
+            alias = root / "alias.joblib"
+            alias.symlink_to(paths[0])
+            with self.assertRaisesRegex(ValueError, "paths must all differ"):
+                train(paths[0], alias, paths[2], paths[3])
+            for path in paths:
+                self.assertEqual(path.read_bytes(), b"existing file")
+
     @staticmethod
     def comparison_data() -> tuple[pd.DataFrame, pd.Series]:
         base = {

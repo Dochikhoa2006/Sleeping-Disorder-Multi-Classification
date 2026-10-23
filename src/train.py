@@ -185,6 +185,10 @@ def train(
     report_path: Path = DEFAULT_REPORT_PATH,
     evaluation_path: Path = DEFAULT_EVALUATION_PATH,
 ) -> dict[str, dict[str, float]]:
+    paths = [data_path, model_path, report_path, evaluation_path]
+    resolved_paths = [path.resolve() for path in paths]
+    if len(set(resolved_paths)) != len(resolved_paths):
+        raise ValueError("Training data, model, plot, and evaluation paths must all differ.")
     features, target = load_training_data(data_path)
     train_indices, holdout_indices = split_training_holdout(features, target)
     training_features = features.iloc[train_indices]
