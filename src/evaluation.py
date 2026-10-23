@@ -67,6 +67,14 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path) -> d
         "total_rows": len(dataset),
         "training_overlap_rows": int(overlap.sum()),
         "evaluated_rows": int(unseen.sum()),
+        "class_row_counts": {
+            label: {
+                "total_rows": int(target.eq(label).sum()),
+                "training_overlap_rows": int((target.eq(label) & overlap).sum()),
+                "evaluated_rows": int((target.eq(label) & unseen).sum()),
+            }
+            for label in labels
+        },
         "labels": labels,
         **classification_metrics(unseen_target, predictions, labels),
     }

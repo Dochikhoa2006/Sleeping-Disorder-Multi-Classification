@@ -181,6 +181,10 @@ the metrics; the command fails if no unseen profiles remain. Training
 fingerprints are stored in the model artifact. As with the training report,
 these metrics are only as representative as the supplied dataset.
 
+The `class_row_counts` section breaks down total, training-overlap, and
+evaluated rows for every model class, including classes with zero rows. This
+shows whether excluding training profiles leaves a class underrepresented.
+
 ## Predict
 
 Try the included synthetic patient examples with the saved model:

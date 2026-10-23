@@ -15,6 +15,26 @@ from src.train import DEFAULT_MODEL_PATH
 
 
 class ExternalEvaluationTests(unittest.TestCase):
+    def test_report_accounts_for_class_coverage_after_overlap_filtering(self) -> None:
+        pipeline = joblib.load(DEFAULT_MODEL_PATH)
+        overlapping = {**self.new_patient(96), TARGET_COLUMN: "Insomnia"}
+        unseen = {**self.new_patient(97), TARGET_COLUMN: "Healthy"}
+        pipeline.training_feature_hashes_ = set(feature_fingerprints(pd.DataFrame([overlapping])))
+        with tempfile.TemporaryDirectory() as directory:
+            data_path = Path(directory) / "external.csv"
+            output_path = Path(directory) / "report.json"
+            pd.DataFrame([overlapping, unseen, unseen]).to_csv(data_path, index=False)
+            with patch("src.evaluation.joblib.load", return_value=pipeline):
+                report = evaluate_external(data_path, DEFAULT_MODEL_PATH, output_path)
+            self.assertEqual(report["class_row_counts"], {
+                "Healthy": {"total_rows": 2, "training_overlap_rows": 0, "evaluated_rows": 2},
+                "Insomnia": {"total_rows": 1, "training_overlap_rows": 1, "evaluated_rows": 0},
+                "Sleep Apnea": {"total_rows": 0, "training_overlap_rows": 0, "evaluated_rows": 0},
+            })
+            for key in ("total_rows", "training_overlap_rows", "evaluated_rows"):
+                self.assertEqual(sum(counts[key] for counts in report["class_row_counts"].values()), report[key])
+            self.assertEqual(json.loads(output_path.read_text())["class_row_counts"], report["class_row_counts"])
+
     def test_output_cannot_overwrite_data_or_model(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data_path = Path(directory) / "external.csv"
