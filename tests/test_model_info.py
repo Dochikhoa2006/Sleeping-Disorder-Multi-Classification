@@ -15,6 +15,26 @@ from src.predict import DEFAULT_MODEL_PATH
 
 
 class ModelInfoTests(unittest.TestCase):
+    def test_cli_can_export_the_saved_models_transformed_feature_schema(self) -> None:
+        output = StringIO()
+        with patch("sys.argv", ["model_info", "--include-features"]), redirect_stdout(output):
+            main()
+        report = json.loads(output.getvalue())
+        features = report["transformed_features"]
+        model = joblib.load(DEFAULT_MODEL_PATH)
+        self.assertEqual(len(features), model[-1].n_features_in_)
+        self.assertEqual(len(features), len(set(features)))
+        self.assertIn("numeric__Age", features)
+        self.assertIn("categorical__BMI Category_Normal", features)
+        self.assertNotIn("transformed_features", inspect_model())
+
+    def test_feature_export_rejects_classifiers_without_preprocessing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            model_path = Path(directory) / "classifier.joblib"
+            joblib.dump(DummyClassifier().fit([[0], [1]], ["Healthy", "Insomnia"]), model_path)
+            with self.assertRaisesRegex(ValueError, "pipeline with preprocessing"):
+                inspect_model(model_path, include_features=True)
+
     def test_inspection_reports_saved_provenance_and_classes(self) -> None:
         report = inspect_model()
         self.assertEqual(report["model_name"], "Support Vector Machine")

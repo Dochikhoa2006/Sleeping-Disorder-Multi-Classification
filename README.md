@@ -157,7 +157,12 @@ results, and SHA-256 fingerprint without supplying patient data:
 ```bash
 python -m src.model_info
 python -m src.model_info --model models/sleep_disorder_pipeline.joblib
+python -m src.model_info --include-features
 ```
+
+`--include-features` adds a `transformed_features` array containing the numeric
+and encoded categorical column names in classifier input order. This option
+requires a pipeline with preprocessing steps.
 
 The command prints JSON to standard output, which can be redirected to a file.
 Training metadata and validation results are `null` for classifiers that do
