@@ -143,8 +143,8 @@ def validate_patient(patient: dict[str, Any]) -> None:
         if (
             isinstance(value, bool)
             or not isinstance(value, Real)
-            or not math.isfinite(float(value))
             or not minimum <= value <= maximum
+            or not math.isfinite(float(value))
         ):
             raise ValueError(
                 f"'{feature}' must be a number from {minimum} to {maximum}."

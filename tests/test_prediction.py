@@ -17,6 +17,25 @@ MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
 
 
 class PredictionTests(unittest.TestCase):
+    def test_extreme_integers_are_validation_errors_before_model_loading(self) -> None:
+        numeric_fields = ("Age", "Sleep Duration", "Quality of Sleep",
+                          "Physical Activity Level", "Stress Level", "Heart Rate", "Daily Steps")
+        for feature in numeric_fields:
+            for value in (10 ** 1000, -(10 ** 1000)):
+                with self.subTest(feature=feature, negative=value < 0), \
+                        patch("src.predict.joblib.load") as load_model:
+                    with self.assertRaisesRegex(ValueError, f"Patient 1: '{feature}'.*must be a number"):
+                        predict_many([{**self.sample_patient(), feature: value}], MODEL_PATH)
+                load_model.assert_not_called()
+
+    def test_cli_reports_extreme_json_integer_without_overflow(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "patient.json"
+            path.write_text(json.dumps({**self.sample_patient(), "Age": 10 ** 1000}), encoding="utf-8")
+            with patch("sys.argv", ["predict", "--input-json", str(path), "--validate-only"]):
+                with self.assertRaisesRegex(SystemExit, "Error: Patient 1: 'Age'.*1 to 120"):
+                    main()
+
     def test_cli_rejects_output_overwriting_input_or_model(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             input_path = Path(directory) / "patients.json"
