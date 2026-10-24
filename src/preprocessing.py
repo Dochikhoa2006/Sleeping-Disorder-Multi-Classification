@@ -126,6 +126,12 @@ class SleepFeatureEngineer(BaseEstimator, TransformerMixin):
         if not isinstance(X, pd.DataFrame):
             raise TypeError("Expected prediction data as a pandas DataFrame.")
 
+        duplicates = X.columns[X.columns.duplicated()].unique()
+        if len(duplicates):
+            raise ValueError(
+                "Duplicate input column(s): " + ", ".join(map(str, duplicates))
+            )
+
         missing = [column for column in RAW_FEATURES if column not in X.columns]
         if missing:
             raise ValueError(

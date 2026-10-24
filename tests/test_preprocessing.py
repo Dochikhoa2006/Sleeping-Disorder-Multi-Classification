@@ -29,6 +29,17 @@ def patient_frame(blood_pressure: str = "120/80") -> pd.DataFrame:
 
 
 class SleepFeatureEngineerTests(unittest.TestCase):
+    def test_duplicate_input_columns_are_rejected_before_feature_engineering(self) -> None:
+        for column in ("Age", "Blood Pressure", "Person ID"):
+            frame = patient_frame()
+            duplicate = pd.concat([frame, frame[[column]]], axis=1)
+            original = duplicate.copy(deep=True)
+            for operation in ("fit", "transform"):
+                with self.subTest(column=column, operation=operation):
+                    with self.assertRaisesRegex(ValueError, f"Duplicate input column.*{column}"):
+                        getattr(SleepFeatureEngineer(), operation)(duplicate)
+                    pd.testing.assert_frame_equal(duplicate, original)
+
     def test_engineered_feature_names_match_transformed_columns(self) -> None:
         transformer = SleepFeatureEngineer()
         frame = patient_frame()
