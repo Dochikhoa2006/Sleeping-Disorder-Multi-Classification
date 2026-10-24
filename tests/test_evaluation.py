@@ -3,6 +3,8 @@ import hashlib
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,12 +12,26 @@ import joblib
 import pandas as pd
 
 from src.evaluation import evaluate_external, feature_fingerprints
+from src.evaluate import main
 from src.predict import predict
 from src.preprocessing import TARGET_COLUMN
 from src.train import DEFAULT_MODEL_PATH
 
 
 class ExternalEvaluationTests(unittest.TestCase):
+    def test_cli_without_output_prints_only_json_and_creates_no_report_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data_path = root / "patients.csv"
+            pd.DataFrame([{**self.new_patient(97), TARGET_COLUMN: "Healthy"}]).to_csv(data_path, index=False)
+            output = StringIO()
+            with patch("sys.argv", ["evaluate", "--data", str(data_path)]), redirect_stdout(output):
+                main()
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["evaluated_rows"], 1)
+            self.assertEqual(report, evaluate_external(data_path, DEFAULT_MODEL_PATH))
+            self.assertEqual(list(root.iterdir()), [data_path])
+
     def test_report_counts_equivalent_unseen_profiles_without_dropping_rows(self) -> None:
         first = {**self.new_patient(97), TARGET_COLUMN: "Healthy", "Person ID": 1}
         equivalent = {**first, "Person ID": 2, "BMI Category": "Normal Weight",

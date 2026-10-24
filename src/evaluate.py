@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from src.evaluation import evaluate_external
@@ -13,12 +14,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate a model on labeled unseen profiles.")
     parser.add_argument("--data", type=Path, required=True, help="Labeled CSV or gzip-compressed CSV (.gz) to evaluate.")
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
-    parser.add_argument("--output", type=Path, required=True, help="JSON report destination.")
+    parser.add_argument("--output", type=Path, help="JSON report destination; omit to print JSON to standard output.")
     arguments = parser.parse_args()
     try:
         report = evaluate_external(arguments.data, arguments.model, arguments.output)
     except (OSError, ValueError) as error:
         raise SystemExit(f"Error: {error}") from error
+    if arguments.output is None:
+        print(json.dumps(report, indent=2, allow_nan=False))
+        return
     print(f"Evaluated {report['evaluated_rows']} of {report['total_rows']} rows; excluded {report['training_overlap_rows']} training-profile overlaps.")
     print(f"Macro F1={report['macro_f1']:.3f}, accuracy={report['accuracy']:.3f}")
     print(f"Saved evaluation to: {arguments.output}")

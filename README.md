@@ -184,6 +184,13 @@ columns and a `Sleep Disorder` column with explicit `Healthy`, `Insomnia`, or
 python -m src.evaluate --data external_patients.csv --output external_evaluation.json
 ```
 
+Omit `--output` to print the complete JSON report to standard output without
+creating a report file, for example when piping the result to another tool:
+
+```bash
+python -m src.evaluate --data external_patients.csv
+```
+
 Gzip-compressed CSVs are also accepted with `--data external_patients.csv.gz`.
 The dataset fingerprint identifies the original compressed file contents.
 

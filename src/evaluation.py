@@ -34,9 +34,9 @@ def feature_fingerprints(features: pd.DataFrame) -> pd.Series:
     return pd.util.hash_pandas_object(engineered, index=False)
 
 
-def evaluate_external(data_path: Path, model_path: Path, output_path: Path) -> dict:
+def evaluate_external(data_path: Path, model_path: Path, output_path: Path | None = None) -> dict:
     """Score labeled, unseen rows and account for training-profile overlap."""
-    if output_path.resolve() in {data_path.resolve(), model_path.resolve()}:
+    if output_path is not None and output_path.resolve() in {data_path.resolve(), model_path.resolve()}:
         raise ValueError("Evaluation output path must differ from data and model paths.")
     model_bytes = model_path.read_bytes()
     pipeline = joblib.load(BytesIO(model_bytes))
@@ -82,6 +82,7 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path) -> d
         "labels": labels,
         **classification_metrics(unseen_target, predictions, labels),
     }
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return report
