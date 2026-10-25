@@ -259,6 +259,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main() -> None:
     arguments = parse_args()
-    train(arguments.data, arguments.model_output, arguments.report_output, arguments.evaluation_output)
+    try:
+        train(arguments.data, arguments.model_output, arguments.report_output, arguments.evaluation_output)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"Error: {error}") from error
+
+
+if __name__ == "__main__":
+    main()

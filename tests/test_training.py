@@ -9,10 +9,31 @@ from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 
 from src.preprocessing import RAW_FEATURES, build_pipeline
-from src.train import compare_models, load_training_data, make_feature_groups, split_training_holdout, train
+from src.train import compare_models, load_training_data, main, make_feature_groups, split_training_holdout, train
 
 
 class TrainingTests(unittest.TestCase):
+    def test_training_cli_reports_missing_dataset_as_a_user_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "missing.csv"
+            with patch("sys.argv", ["train", "--data", str(path)]):
+                with self.assertRaisesRegex(SystemExit, "Error:.*missing.csv"):
+                    main()
+
+    def test_training_cli_reports_invalid_labels_without_creating_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "data.csv"
+            path.write_text("Age,Sleep Disorder\n31,Insomina\n", encoding="utf-8")
+            options = ["train", "--data", str(path),
+                       "--model-output", str(root / "model.joblib"),
+                       "--report-output", str(root / "plot.png"),
+                       "--evaluation-output", str(root / "report.json")]
+            with patch("sys.argv", options):
+                with self.assertRaisesRegex(SystemExit, "Error: Unsupported 'Sleep Disorder'.*Insomina"):
+                    main()
+            self.assertEqual(list(root.iterdir()), [path])
+
     def test_training_rejects_all_output_path_collisions_before_reading_data(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
