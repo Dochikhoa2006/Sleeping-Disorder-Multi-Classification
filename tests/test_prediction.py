@@ -17,6 +17,25 @@ MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
 
 
 class PredictionTests(unittest.TestCase):
+    def test_json_accepts_utf8_with_or_without_byte_order_mark(self) -> None:
+        patient = {**self.sample_patient(), "Occupation": "Ingénieur"}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "patients.json"
+            for encoding in ("utf-8", "utf-8-sig"):
+                for records in (patient, [patient, {**patient, "Age": 55}]):
+                    with self.subTest(encoding=encoding, batch=isinstance(records, list)):
+                        path.write_text(json.dumps(records, ensure_ascii=False), encoding=encoding)
+                        self.assertEqual(load_patient_json(path), records)
+
+    def test_validation_cli_accepts_json_with_a_byte_order_mark(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "patient.json"
+            path.write_text(json.dumps(self.sample_patient()), encoding="utf-8-sig")
+            output = StringIO()
+            with patch("sys.argv", ["predict", "--input-json", str(path), "--validate-only"]), redirect_stdout(output):
+                main()
+            self.assertEqual(output.getvalue(), "Validated 1 patient record(s).\n")
+
     def test_extreme_integers_are_validation_errors_before_model_loading(self) -> None:
         numeric_fields = ("Age", "Sleep Duration", "Quality of Sleep",
                           "Physical Activity Level", "Stress Level", "Heart Rate", "Daily Steps")

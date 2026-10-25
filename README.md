@@ -261,6 +261,7 @@ python -m src.predict --input-json patient.json
 ```
 
 For several patients, supply a JSON array of objects with the same fields.
+JSON files may use UTF-8 with or without a byte-order mark.
 Predictions are returned in input order, and invalid records are identified by
 their position. Duplicate JSON field names are rejected, including when their
 values match, so repeated fields cannot silently overwrite patient data.

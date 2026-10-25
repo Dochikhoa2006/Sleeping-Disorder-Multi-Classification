@@ -36,7 +36,7 @@ def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def load_patient_json(path: Path) -> dict[str, Any] | list[dict[str, Any]]:
-    with path.open(encoding="utf-8") as input_file:
+    with path.open(encoding="utf-8-sig") as input_file:
         patient = json.load(input_file, object_pairs_hook=_unique_json_object)
     if isinstance(patient, list):
         if not patient:
