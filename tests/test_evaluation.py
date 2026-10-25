@@ -19,6 +19,23 @@ from src.train import DEFAULT_MODEL_PATH
 
 
 class ExternalEvaluationTests(unittest.TestCase):
+    def test_invalid_gzip_inputs_have_clear_cli_errors_and_preserve_reports(self) -> None:
+        compressed = gzip.compress(b"Age,Sleep Disorder\n97,Healthy\n")
+        corrupt_deflate = bytearray(compressed)
+        corrupt_deflate[10] = 0x07
+        for contents in (b"not gzip data", compressed[:-5], bytes(corrupt_deflate)):
+            with self.subTest(contents=contents), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                data_path = root / "patients.csv.gz"
+                data_path.write_bytes(contents)
+                output_path = root / "report.json"
+                output_path.write_bytes(b"existing report")
+                with patch("sys.argv", ["evaluate", "--data", str(data_path), "--output", str(output_path)]):
+                    with self.assertRaisesRegex(SystemExit, "Error: Evaluation gzip input is invalid or truncated"):
+                        main()
+                self.assertEqual(output_path.read_bytes(), b"existing report")
+                self.assertEqual(data_path.read_bytes(), contents)
+
     def test_cli_without_output_prints_only_json_and_creates_no_report_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

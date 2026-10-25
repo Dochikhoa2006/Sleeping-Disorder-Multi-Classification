@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import zlib
 from io import BytesIO
 from pathlib import Path
 
@@ -43,7 +44,13 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path | Non
     if not hasattr(pipeline, "training_feature_hashes_"):
         raise ValueError("Model lacks training fingerprints; retrain it before external evaluation.")
     dataset_bytes = data_path.read_bytes()
-    csv_bytes = gzip.decompress(dataset_bytes) if data_path.suffix.lower() == ".gz" else dataset_bytes
+    if data_path.suffix.lower() == ".gz":
+        try:
+            csv_bytes = gzip.decompress(dataset_bytes)
+        except (OSError, EOFError, zlib.error) as error:
+            raise ValueError("Evaluation gzip input is invalid or truncated.") from error
+    else:
+        csv_bytes = dataset_bytes
     dataset = pd.read_csv(BytesIO(csv_bytes))
     if dataset.empty:
         raise ValueError("Evaluation CSV must contain at least one row.")
