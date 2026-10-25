@@ -148,6 +148,8 @@ writes. Missing labels continue to be interpreted as `Healthy`.
 Model comparison stops if a cross-validation fold fails or returns a
 non-finite score, so incomplete validation results cannot select the saved
 model. Existing artifacts are not updated in that case.
+Every fold's macro F1 uses the full training class list; classes absent from
+a validation fold contribute zero rather than disappearing from the average.
 
 ## Inspect the saved model
 

@@ -19,6 +19,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import f1_score, make_scorer
 from sklearn.model_selection import StratifiedGroupKFold, cross_validate
 from sklearn.svm import SVC
 
@@ -107,6 +108,9 @@ def compare_models(
     )
     groups = make_feature_groups(features)
     results: dict[str, dict[str, float]] = {}
+    macro_f1 = make_scorer(
+        f1_score, labels=sorted(set(target)), average="macro", zero_division=0, pos_label=None,
+    )
 
     for name, estimator in candidate_models().items():
         scores = cross_validate(
@@ -115,7 +119,7 @@ def compare_models(
             target,
             groups=groups,
             cv=cross_validation,
-            scoring={"f1_macro": "f1_macro", "accuracy": "accuracy"},
+            scoring={"f1_macro": macro_f1, "accuracy": "accuracy"},
             n_jobs=1,
             error_score="raise",
         )

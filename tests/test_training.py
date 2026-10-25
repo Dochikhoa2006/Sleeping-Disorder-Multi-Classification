@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
+import numpy as np
 from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 
@@ -13,6 +14,17 @@ from src.train import compare_models, load_training_data, main, make_feature_gro
 
 
 class TrainingTests(unittest.TestCase):
+    def test_fold_macro_f1_keeps_classes_missing_from_validation(self) -> None:
+        features, target = self.comparison_data()
+        # Validation contains only Healthy, while training contains all classes.
+        folds = [(np.arange(1, len(features)), np.array([0])) for _ in range(5)]
+        models = {"Constant Healthy": DummyClassifier(strategy="constant", constant="Healthy")}
+        with patch("src.train.candidate_models", return_value=models), \
+                patch("src.train.StratifiedGroupKFold", return_value=folds):
+            results, best = compare_models(features, target)
+        self.assertAlmostEqual(results[best]["accuracy"], 1.0)
+        self.assertAlmostEqual(results[best]["f1_macro"], 1 / 3)
+
     def test_training_cli_reports_missing_dataset_as_a_user_error(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "missing.csv"
