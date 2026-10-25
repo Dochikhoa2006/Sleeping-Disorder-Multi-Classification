@@ -14,6 +14,7 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
 from src.preprocessing import CATEGORICAL_FEATURES, NUMERIC_FEATURES, TARGET_COLUMN, SleepFeatureEngineer
+from src.output import atomic_text_output
 
 
 def classification_metrics(target: pd.Series, predictions: list[str], labels: list[str]) -> dict:
@@ -91,5 +92,7 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path | Non
     }
     if output_path is not None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        with atomic_text_output(output_path) as output_file:
+            json.dump(report, output_file, indent=2, allow_nan=False)
+            output_file.write("\n")
     return report

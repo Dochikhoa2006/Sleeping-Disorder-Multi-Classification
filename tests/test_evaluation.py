@@ -19,6 +19,23 @@ from src.train import DEFAULT_MODEL_PATH
 
 
 class ExternalEvaluationTests(unittest.TestCase):
+    def test_failed_report_write_preserves_existing_report_and_removes_temporary_file(self) -> None:
+        def fail_during_write(report, output_file, **kwargs):
+            output_file.write('{"partial":')
+            raise OSError("Simulated report write failure")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data_path = root / "patients.csv"
+            pd.DataFrame([{**self.new_patient(97), TARGET_COLUMN: "Healthy"}]).to_csv(data_path, index=False)
+            output_path = root / "report.json"
+            output_path.write_bytes(b"existing report")
+            with patch("src.evaluation.json.dump", side_effect=fail_during_write):
+                with self.assertRaisesRegex(OSError, "Simulated report write failure"):
+                    evaluate_external(data_path, DEFAULT_MODEL_PATH, output_path)
+            self.assertEqual(output_path.read_bytes(), b"existing report")
+            self.assertEqual(set(root.iterdir()), {data_path, output_path})
+
     def test_invalid_gzip_inputs_have_clear_cli_errors_and_preserve_reports(self) -> None:
         compressed = gzip.compress(b"Age,Sleep Disorder\n97,Healthy\n")
         corrupt_deflate = bytearray(compressed)

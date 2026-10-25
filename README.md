@@ -198,6 +198,9 @@ creating a report file, for example when piping the result to another tool:
 python -m src.evaluate --data external_patients.csv
 ```
 
+File reports replace their destination only after writing succeeds. A failed
+write preserves any existing report and removes the temporary file.
+
 Gzip-compressed CSVs are also accepted with `--data external_patients.csv.gz`.
 The dataset fingerprint identifies the original compressed file contents.
 
