@@ -294,6 +294,7 @@ The output adds a `Predicted Sleep Disorder` column. Numeric fields must contain
 numbers; blood pressure uses `systolic/diastolic` format. The command reports
 the CSV row number for invalid records and does not write an output file until
 all rows have passed validation. The input and output paths must differ.
+Malformed CSV quoting is rejected before prediction or output writing.
 
 JSON and CSV prediction exports are written to a temporary file beside the
 destination, then replace it after a successful write. If writing fails, any

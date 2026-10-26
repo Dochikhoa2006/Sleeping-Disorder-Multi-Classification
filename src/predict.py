@@ -52,7 +52,7 @@ def load_patient_json(path: Path) -> dict[str, Any] | list[dict[str, Any]]:
 def load_patient_csv(path: Path) -> tuple[list[str], list[dict[str, str]], list[dict[str, Any]]]:
     """Read CSV rows without changing their original values for output."""
     with path.open(encoding="utf-8-sig", newline="") as input_file:
-        reader = csv.reader(input_file)
+        reader = csv.reader(input_file, strict=True)
         columns = next(reader, None)
         if not columns:
             raise ValueError("Patient CSV must have a header and at least one row.")
@@ -254,7 +254,7 @@ def main() -> None:
                 output_file.write(json.dumps(predictions, indent=2) + "\n")
         if arguments.output_csv:
             write_prediction_csv(arguments.output_csv, columns, original_rows, predictions)
-    except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
+    except (OSError, ValueError, TypeError, json.JSONDecodeError, csv.Error) as error:
         raise SystemExit(f"Error: {error}") from error
 
     if arguments.output_json or arguments.output_csv:

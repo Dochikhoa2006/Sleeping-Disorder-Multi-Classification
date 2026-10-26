@@ -17,6 +17,27 @@ MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
 
 
 class PredictionTests(unittest.TestCase):
+    def test_malformed_csv_quoting_stops_before_model_loading_or_output(self) -> None:
+        patient = self.sample_patient()
+        header = ",".join(patient) + ",Notes\n"
+        values = ",".join(str(value) for value in patient.values())
+        for notes in ('"unfinished\n', '"closed"trailing\n'):
+            with self.subTest(notes=notes), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                input_path = root / "patients.csv"
+                input_path.write_text(header + values + "," + notes, encoding="utf-8")
+                output_path = root / "predictions.csv"
+                output_path.write_bytes(b"existing predictions")
+                with self.assertRaises(csv.Error):
+                    load_patient_csv(input_path)
+                with patch("sys.argv", ["predict", "--input-csv", str(input_path),
+                                        "--output-csv", str(output_path)]), \
+                        patch("src.predict.joblib.load") as load_model:
+                    with self.assertRaisesRegex(SystemExit, "Error:"):
+                        main()
+                load_model.assert_not_called()
+                self.assertEqual(output_path.read_bytes(), b"existing predictions")
+
     def test_json_accepts_utf8_with_or_without_byte_order_mark(self) -> None:
         patient = {**self.sample_patient(), "Occupation": "Ingénieur"}
         with tempfile.TemporaryDirectory() as directory:
