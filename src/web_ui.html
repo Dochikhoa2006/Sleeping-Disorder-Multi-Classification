@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sleep &amp; lifestyle · Model explorer</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f4ef; color: #18342f; font-family: system-ui, sans-serif; line-height: 1.55; }
+    main { max-width: 1120px; margin: auto; padding: 54px 26px; }
+    .eyebrow { font-size: 11px; font-weight: 750; letter-spacing: .17em; }
+    header { padding-bottom: 34px; border-bottom: 1px solid #d5ddd6; }
+    h1 { font-size: clamp(36px, 6vw, 64px); line-height: 1.06; letter-spacing: -.055em; margin: 18px 0; }
+    header p { max-width: 600px; color: #53675e; }
+    .layout { display: grid; grid-template-columns: 2fr 1fr; gap: 32px; margin-top: 32px; align-items: start; }
+    form { background: white; border: 1px solid #dde2dc; border-radius: 18px; padding: 28px; }
+    h2 { font-size: 21px; margin: 0 0 12px; letter-spacing: -.03em; }
+    .hint { color: #65756d; font-size: 14px; margin-bottom: 26px; }
+    .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    label { font-size: 12px; font-weight: 650; color: #53675e; }
+    input { display: block; width: 100%; padding: 12px; margin-top: 7px; font: inherit; font-size: 15px; color: #18342f; background: #fafbf8; border: 1px solid #cdd7cf; border-radius: 8px; }
+    input:focus { outline: 3px solid #b8dfcf; outline-offset: 1px; }
+    button { margin-top: 26px; background: #1d6651; border: 0; border-radius: 9px; color: white; padding: 14px 23px; font: inherit; font-weight: 650; cursor: pointer; }
+    button:hover { background: #174d3e; }
+    button:focus-visible { outline: 3px solid #74b79b; outline-offset: 3px; }
+    .feedback { background: #e7ece3; padding: 26px; border-radius: 16px; }
+    .feedback p { font-size: 14px; }
+    .result { background: #dcefe4; border: 1px solid #94c6ad; }
+    .result h2 { font-size: 34px; }
+    .error { background: #fae8df; border: 1px solid #dcac94; }
+    .privacy, .limits { padding: 8px 4px; font-size: 13px; color: #65756d; }
+    footer { border-top: 1px solid #d5ddd6; margin-top: 34px; padding-top: 20px; color: #65756d; font-size: 12px; }
+    @media (max-width: 760px) { main { padding: 28px 18px; } .layout { grid-template-columns: 1fr; } form { padding: 22px; } }
+    @media (max-width: 460px) { .fields { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">SLEEP HEALTH / MODEL EXPLORER</div>
+      <h1>A closer look at<br>sleep &amp; lifestyle.</h1>
+      <p>Explore how a trained model classifies sleep and lifestyle details as Healthy, Insomnia, or Sleep Apnea.</p>
+    </header>
+    <div class="layout">
+      <form action="/predict" method="post">
+        <h2>Patient details</h2>
+        <p class="hint">Use Normal, Normal Weight, Overweight, or Obese for BMI category. All fields are required.</p>
+        <div class="fields">$fields</div>
+        <button type="submit">Predict sleep class →</button>
+      </form>
+      <aside>
+        $feedback
+        <p class="privacy">Runs locally. Entries are not stored or sent to an external service.</p>
+        <p class="limits">Trained on a small synthetic dataset. This model has not been clinically validated.</p>
+      </aside>
+    </div>
+    <footer>Educational exploration only. Predictions are not medical advice or a diagnosis.</footer>
+  </main>
+</body>
+</html>

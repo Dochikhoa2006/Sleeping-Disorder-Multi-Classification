@@ -74,12 +74,15 @@ sleep-disorder-classification/
 │   ├── evaluation.py
 │   ├── model_info.py
 │   ├── output.py
+│   ├── web.py
+│   ├── web_ui.html
 │   └── preprocessing.py
 ├── tests/
 │   ├── test_prediction.py
 │   ├── test_evaluation.py
 │   ├── test_model_info.py
 │   ├── test_output.py
+│   ├── test_web.py
 │   ├── test_preprocessing.py
 │   └── test_training.py
 ├── .github/workflows/ci.yml
@@ -225,6 +228,23 @@ profiles with different IDs or formatting count as repeats. Metrics still
 include every evaluated row; these counts make repeated profiles visible.
 
 ## Predict
+
+### Local browser interface
+
+Start a form-based interface with no additional dependencies:
+
+```bash
+python -m src.web
+```
+
+Open **http://127.0.0.1:8765** in a browser. Edit the prefilled example and
+select **Predict sleep class** to see the saved model's prediction. Invalid
+entries show an explanation and retain your values for correction. The server
+binds only to this computer; entries are not stored or sent to external
+services. Stop it with Ctrl+C. Optional `--port` and `--model` arguments select
+a different port or trusted model file.
+
+### Command-line prediction
 
 Try the included synthetic patient examples with the saved model:
 
