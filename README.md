@@ -43,6 +43,8 @@ These are internal dataset estimates, not results from an external test set.
 - Blood pressure is parsed into systolic and diastolic values, and severe
   hypertension is checked before the broader stage-2 condition.
 - Categorical features use an encoder that safely handles unseen values.
+- Surrounding whitespace is trimmed from gender, occupation, and BMI labels
+  before encoding, consistently across training and prediction.
 - Numeric and categorical missing values are imputed inside each validation
   fold, preventing preprocessing leakage.
 - Equivalent engineered feature rows are assigned to the same validation group

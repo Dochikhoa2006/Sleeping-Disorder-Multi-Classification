@@ -29,6 +29,25 @@ def patient_frame(blood_pressure: str = "120/80") -> pd.DataFrame:
 
 
 class SleepFeatureEngineerTests(unittest.TestCase):
+    def test_categorical_whitespace_is_normalized_without_mutating_input(self) -> None:
+        clean = patient_frame()
+        padded = clean.copy()
+        for column in ("Gender", "Occupation", "BMI Category"):
+            padded[column] = " \t" + padded[column] + "\n "
+        original = padded.copy(deep=True)
+        transformer = SleepFeatureEngineer()
+        pd.testing.assert_frame_equal(transformer.transform(clean), transformer.transform(padded))
+        pd.testing.assert_frame_equal(padded, original)
+
+    def test_saved_model_preprocessing_matches_for_padded_categories(self) -> None:
+        model = joblib.load(DEFAULT_MODEL_PATH)
+        clean = patient_frame()
+        padded = clean.copy()
+        for column in ("Gender", "Occupation", "BMI Category"):
+            padded[column] = " " + padded[column] + " "
+        self.assertEqual(model.predict(clean).tolist(), model.predict(padded).tolist())
+        self.assertEqual(model[:-1].transform(clean).tolist(), model[:-1].transform(padded).tolist())
+
     def test_duplicate_input_columns_are_rejected_before_feature_engineering(self) -> None:
         for column in ("Age", "Blood Pressure", "Person ID"):
             frame = patient_frame()

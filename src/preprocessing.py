@@ -94,6 +94,10 @@ class SleepFeatureEngineer(BaseEstimator, TransformerMixin):
 
     def transform(self, X: Any) -> pd.DataFrame:
         frame = self._validate_input(X).copy()
+        for column in ("Gender", "Occupation", "BMI Category"):
+            frame[column] = frame[column].map(
+                lambda value: value.strip() if isinstance(value, str) else value
+            )
 
         pressure = frame["Blood Pressure"].astype("string").str.extract(
             r"^\s*(?P<systolic>\d+(?:\.\d+)?)\s*/\s*"
