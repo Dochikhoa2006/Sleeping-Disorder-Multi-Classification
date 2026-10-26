@@ -3,16 +3,25 @@
 from __future__ import annotations
 
 import argparse
+import csv
+from email import policy
+from email.parser import BytesParser
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import StringIO
 from pathlib import Path
 from string import Template
 from urllib.parse import parse_qs
 
-from src.predict import CSV_NUMERIC_FEATURES, DEFAULT_MODEL_PATH, predict
+from src.predict import (
+    CSV_NUMERIC_FEATURES, DEFAULT_MODEL_PATH, PREDICTION_COLUMN,
+    predict, predict_many, read_patient_csv,
+)
 from src.preprocessing import RAW_FEATURES
 
 TEMPLATE_PATH = Path(__file__).with_name("web_ui.html")
+EXAMPLE_CSV_PATH = Path(__file__).resolve().parents[1] / "examples" / "patients.csv"
+MAX_UPLOAD_BYTES = 2 * 1024 * 1024
 DEFAULT_PATIENT = {
     "Gender": "Male", "Age": 31, "Occupation": "Software Engineer",
     "Sleep Duration": 7.2, "Quality of Sleep": 8,
@@ -65,10 +74,13 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
             # Patient input is neither persisted nor written to access logs.
             pass
 
-        def respond(self, status: int, body: str) -> None:
+        def respond(self, status: int, body: str, *, content_type: str = "text/html; charset=utf-8", filename: str | None = None) -> None:
             encoded = body.encode("utf-8")
             self.send_response(status)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Type", content_type)
+            if filename:
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Length", str(len(encoded)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
@@ -87,12 +99,18 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 self.respond(403, "Local requests only.")
             elif self.path == "/":
                 self.respond(200, render_page())
+            elif self.path == "/example.csv":
+                self.respond(200, EXAMPLE_CSV_PATH.read_text(encoding="utf-8"),
+                             content_type="text/csv; charset=utf-8", filename="example-patients.csv")
             else:
                 self.respond(404, "Page not found.")
 
         def do_POST(self) -> None:
             if not self.local_request():
                 self.respond(403, "Local requests only.")
+                return
+            if self.path == "/batch":
+                self.batch_predict()
                 return
             if self.path != "/predict":
                 self.respond(404, "Page not found.")
@@ -124,6 +142,46 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 self.respond(503, render_page(values, error="The model could not be loaded. Check the server's model path."))
                 return
             self.respond(200, render_page(values, result=result))
+
+        def batch_predict(self) -> None:
+            if self.headers.get_content_type() != "multipart/form-data":
+                self.respond(415, render_page(error="Choose a CSV using the batch upload form."))
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= MAX_UPLOAD_BYTES:
+                    self.respond(413, render_page(error="Choose a CSV smaller than 2 MiB, including upload overhead."))
+                    return
+                content_type = self.headers.get("Content-Type", "")
+                message = BytesParser(policy=policy.default).parsebytes(
+                    f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("ascii")
+                    + self.rfile.read(length)
+                )
+                if not message.is_multipart() or any(part.defects for part in message.walk()):
+                    raise ValueError("The upload is incomplete or malformed. Choose the CSV again.")
+                parts = list(message.iter_parts())
+                if len(parts) != 1 or parts[0].get_param("name", header="content-disposition") != "patients":
+                    raise ValueError("Upload exactly one patient CSV file.")
+                upload = parts[0]
+                if not upload.get_filename():
+                    raise ValueError("Choose a CSV file to upload.")
+                payload = upload.get_payload(decode=True)
+                if payload is None:
+                    raise ValueError("The uploaded file is empty or malformed.")
+                columns, rows, patients = read_patient_csv(StringIO(payload.decode("utf-8-sig"), newline=""))
+                predictions = predict_many(patients, model_path)
+                output = StringIO(newline="")
+                writer = csv.DictWriter(output, fieldnames=[*columns, PREDICTION_COLUMN])
+                writer.writeheader()
+                for row, prediction in zip(rows, predictions, strict=True):
+                    writer.writerow({**row, PREDICTION_COLUMN: prediction})
+            except (ValueError, TypeError, UnicodeError, csv.Error) as error:
+                self.respond(400, render_page(error=str(error)))
+                return
+            except OSError:
+                self.respond(503, render_page(error="The model could not be loaded. Check the server's model path."))
+                return
+            self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8", filename="sleep-predictions.csv")
 
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 

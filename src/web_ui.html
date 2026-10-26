@@ -28,6 +28,11 @@
     .result { background: #dcefe4; border: 1px solid #94c6ad; }
     .result h2 { font-size: 34px; }
     .error { background: #fae8df; border: 1px solid #dcac94; }
+    .batch { margin-top: 22px; padding: 22px; }
+    .batch .hint { margin-bottom: 16px; }
+    .batch button { width: 100%; margin-top: 18px; padding: 12px; }
+    .batch input { font-size: 12px; }
+    a { color: #1d6651; text-underline-offset: 3px; }
     .privacy, .limits { padding: 8px 4px; font-size: 13px; color: #65756d; }
     footer { border-top: 1px solid #d5ddd6; margin-top: 34px; padding-top: 20px; color: #65756d; font-size: 12px; }
     @media (max-width: 760px) { main { padding: 28px 18px; } .layout { grid-template-columns: 1fr; } form { padding: 22px; } }
@@ -50,7 +55,16 @@
       </form>
       <aside>
         $feedback
-        <p class="privacy">Runs locally. Entries are not stored or sent to an external service.</p>
+        <form class="batch" action="/batch" method="post" enctype="multipart/form-data">
+          <h2>Predict a whole CSV</h2>
+          <p class="hint">Upload patient rows and download a CSV with predictions. Record IDs and other columns are preserved.</p>
+          <label for="batch-file">Patient CSV · up to 2 MiB including upload overhead
+            <input id="batch-file" type="file" name="patients" accept=".csv,text/csv" required>
+          </label>
+          <button type="submit">Download predictions ↓</button>
+          <p class="hint"><a href="/example.csv" download>Download an example CSV</a></p>
+        </form>
+        <p class="privacy">Runs locally. The server does not store your entries or send them to an external service.</p>
         <p class="limits">Trained on a small synthetic dataset. This model has not been clinically validated.</p>
       </aside>
     </div>

@@ -244,6 +244,13 @@ binds only to this computer; entries are not stored or sent to external
 services. Stop it with Ctrl+C. Optional `--port` and `--model` arguments select
 a different port or trusted model file.
 
+For batch prediction, use **Predict a whole CSV** to choose a UTF-8 patient
+CSV and download `sleep-predictions.csv`. The output preserves input columns
+and row order and adds `Predicted Sleep Disorder`. An example CSV is available
+from the interface. Uploads, including form overhead, are limited to 2 MiB and
+processed in memory. Every row is validated before prediction; an invalid file
+shows an error instead of downloading partial results.
+
 ### Command-line prediction
 
 Try the included synthetic patient examples with the saved model:

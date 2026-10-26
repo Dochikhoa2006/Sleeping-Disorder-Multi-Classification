@@ -9,7 +9,7 @@ import math
 import re
 from pathlib import Path
 from numbers import Real
-from typing import Any
+from typing import Any, TextIO
 
 import joblib
 import pandas as pd
@@ -52,36 +52,41 @@ def load_patient_json(path: Path) -> dict[str, Any] | list[dict[str, Any]]:
 def load_patient_csv(path: Path) -> tuple[list[str], list[dict[str, str]], list[dict[str, Any]]]:
     """Read CSV rows without changing their original values for output."""
     with path.open(encoding="utf-8-sig", newline="") as input_file:
-        reader = csv.reader(input_file, strict=True)
-        columns = next(reader, None)
-        if not columns:
-            raise ValueError("Patient CSV must have a header and at least one row.")
-        if len(columns) != len(set(columns)) or any(not column for column in columns):
-            raise ValueError("Patient CSV headers must be unique and non-empty.")
-        missing = sorted(set(RAW_FEATURES) - set(columns))
-        if missing:
-            raise ValueError("Missing required feature(s): " + ", ".join(missing))
-        if PREDICTION_COLUMN in columns:
-            raise ValueError(f"Patient CSV already has a '{PREDICTION_COLUMN}' column.")
+        return read_patient_csv(input_file)
 
-        original_rows: list[dict[str, str]] = []
-        patients: list[dict[str, Any]] = []
-        for row_number, values in enumerate(reader, start=2):
-            if len(values) != len(columns):
-                raise ValueError(f"CSV row {row_number}: expected {len(columns)} fields, got {len(values)}.")
-            original = dict(zip(columns, values))
-            patient: dict[str, Any] = dict(original)
-            for feature in CSV_NUMERIC_FEATURES:
-                try:
-                    patient[feature] = float(original[feature])
-                except ValueError as error:
-                    raise ValueError(f"CSV row {row_number}: '{feature}' must be a number.") from error
+
+def read_patient_csv(input_file: TextIO) -> tuple[list[str], list[dict[str, str]], list[dict[str, Any]]]:
+    """Validate a CSV text stream, shared by file and browser upload inputs."""
+    reader = csv.reader(input_file, strict=True)
+    columns = next(reader, None)
+    if not columns:
+        raise ValueError("Patient CSV must have a header and at least one row.")
+    if len(columns) != len(set(columns)) or any(not column for column in columns):
+        raise ValueError("Patient CSV headers must be unique and non-empty.")
+    missing = sorted(set(RAW_FEATURES) - set(columns))
+    if missing:
+        raise ValueError("Missing required feature(s): " + ", ".join(missing))
+    if PREDICTION_COLUMN in columns:
+        raise ValueError(f"Patient CSV already has a '{PREDICTION_COLUMN}' column.")
+
+    original_rows: list[dict[str, str]] = []
+    patients: list[dict[str, Any]] = []
+    for row_number, values in enumerate(reader, start=2):
+        if len(values) != len(columns):
+            raise ValueError(f"CSV row {row_number}: expected {len(columns)} fields, got {len(values)}.")
+        original = dict(zip(columns, values))
+        patient: dict[str, Any] = dict(original)
+        for feature in CSV_NUMERIC_FEATURES:
             try:
-                validate_patient(patient)
-            except (ValueError, TypeError) as error:
-                raise ValueError(f"CSV row {row_number}: {error}") from error
-            original_rows.append(original)
-            patients.append(patient)
+                patient[feature] = float(original[feature])
+            except ValueError as error:
+                raise ValueError(f"CSV row {row_number}: '{feature}' must be a number.") from error
+        try:
+            validate_patient(patient)
+        except (ValueError, TypeError) as error:
+            raise ValueError(f"CSV row {row_number}: {error}") from error
+        original_rows.append(original)
+        patients.append(patient)
     if not patients:
         raise ValueError("Patient CSV must have at least one patient row.")
     return columns, original_rows, patients
