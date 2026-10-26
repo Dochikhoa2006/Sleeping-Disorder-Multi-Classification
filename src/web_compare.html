@@ -1,0 +1,20 @@
+<section class="comparison-intro">
+  <h2>Compare two profiles</h2>
+  <p>Edit either example and compare the model's predictions. A comparison shows model outputs, not the effect of changing a habit.</p>
+</section>
+$feedback
+<form action="/compare" method="post">
+  <div class="profile-grid">
+    <fieldset>
+      <legend>Profile A</legend>
+      <div class="fields">$first</div>
+    </fieldset>
+    <fieldset>
+      <legend>Profile B</legend>
+      <div class="fields">$second</div>
+    </fieldset>
+  </div>
+  <p class="hint">All fields are required. Use Normal, Normal Weight, Overweight, or Obese for BMI category.</p>
+  <button type="submit">Compare predictions →</button>
+</form>
+<p class="privacy">Runs locally. The server does not store these profiles or send them to an external service.</p>

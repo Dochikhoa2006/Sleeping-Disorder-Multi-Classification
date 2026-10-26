@@ -1,5 +1,6 @@
 import http.client
 import csv
+import re
 from io import StringIO
 import threading
 import unittest
@@ -11,6 +12,67 @@ from src.web import DEFAULT_PATIENT, MAX_UPLOAD_BYTES, make_server
 
 
 class WebTests(unittest.TestCase):
+    @staticmethod
+    def comparison_values(first=None, second=None):
+        return {prefix + key: value for prefix, patient in (
+            ("a.", first or DEFAULT_PATIENT), ("b.", second or DEFAULT_PATIENT),
+        ) for key, value in patient.items()}
+
+    def compare(self, values):
+        return self.request("POST", "/compare", urlencode(values), {
+            "Content-Type": "application/x-www-form-urlencoded",
+        })
+
+    def test_comparison_page_has_two_independently_labeled_profiles(self) -> None:
+        status, _, body = self.request("GET", "/compare")
+        self.assertEqual(status, 200)
+        self.assertEqual(body.count("<input "), 22)
+        self.assertIn('name="a.Age"', body)
+        self.assertIn('name="b.Age"', body)
+        self.assertIn('action="/compare"', body)
+        ids = re.findall(r'\bid="([^"]+)"', body)
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertIn("not the effect of changing a habit", body)
+
+    def test_comparison_shows_ordered_predictions_and_edited_fields(self) -> None:
+        alternative = {**DEFAULT_PATIENT, "Age": 55, "Sleep Duration": 5.5}
+        expected = predict_many([DEFAULT_PATIENT, alternative])
+        status, _, body = self.compare(self.comparison_values(second=alternative))
+        self.assertEqual(status, 200)
+        for label, prediction in zip(("A", "B"), expected):
+            self.assertIn(f'PROFILE {label}</p><h2>{prediction}</h2>', body)
+        self.assertIn("Edited fields", body)
+        self.assertIn('<th scope="row">Age</th><td>31</td><td>55</td>', body)
+        self.assertIn('name="b.Sleep Duration" type="number" min="0" max="24" step="any" value="5.5"', body)
+
+    def test_identical_profiles_produce_same_class_without_edited_fields(self) -> None:
+        status, _, body = self.compare(self.comparison_values())
+        self.assertEqual(status, 200)
+        self.assertIn("Both profiles received the same predicted class", body)
+        self.assertIn("identical entries", body)
+        self.assertNotIn("<caption>Edited fields</caption>", body)
+
+    def test_invalid_comparison_retains_both_profiles_without_loading_model(self) -> None:
+        for value in (0, "not-a-number"):
+            values = self.comparison_values(second={**DEFAULT_PATIENT, "Age": value})
+            values["a.Occupation"] = '<script>alert("test")</script>'
+            with self.subTest(age=value), patch("src.predict.joblib.load") as load_model:
+                status, _, body = self.compare(values)
+            load_model.assert_not_called()
+            self.assertEqual(status, 400)
+            self.assertIn("Profile B:", body)
+            self.assertIn("&lt;script&gt;", body)
+            self.assertNotIn("<script>", body)
+            self.assertIn(f'value="{value}"', body)
+            self.assertNotIn("MODEL PREDICTION", body)
+
+    def test_comparison_changes_table_escapes_submitted_text(self) -> None:
+        values = self.comparison_values(second={**DEFAULT_PATIENT, "Occupation": "<img src=x>"})
+        status, _, body = self.compare(values)
+        self.assertEqual(status, 200)
+        self.assertIn("&lt;img src=x&gt;", body)
+        self.assertNotIn("<img", body)
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.server = make_server(port=0)

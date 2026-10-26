@@ -76,6 +76,8 @@ sleep-disorder-classification/
 │   ├── output.py
 │   ├── web.py
 │   ├── web_ui.html
+│   ├── web_patient_form.html
+│   ├── web_compare.html
 │   └── preprocessing.py
 ├── tests/
 │   ├── test_prediction.py
@@ -243,6 +245,12 @@ entries show an explanation and retain your values for correction. The server
 binds only to this computer; entries are not stored or sent to external
 services. Stop it with Ctrl+C. Optional `--port` and `--model` arguments select
 a different port or trusted model file.
+
+Select **Compare profiles** (or open **http://127.0.0.1:8765/compare**) to edit
+two profiles side by side. The results show each predicted class and a table
+of the fields entered differently. Both profiles must pass validation before
+either prediction runs. Comparisons describe model outputs, not causal
+effects of lifestyle changes.
 
 For batch prediction, use **Predict a whole CSV** to choose a UTF-8 patient
 CSV and download `sleep-predictions.csv`. The output preserves input columns

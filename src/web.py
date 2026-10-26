@@ -42,30 +42,76 @@ LABELS = {
 }
 
 
-def render_page(values: dict | None = None, *, result: str | None = None, error: str | None = None) -> str:
-    values = DEFAULT_PATIENT if values is None else values
+def render_fields(values: dict, prefix: str = "") -> str:
     fields = []
     for index, feature in enumerate(RAW_FEATURES):
-        value = escape(str(values.get(feature, "")), quote=True)
+        value = escape(str(values.get(prefix + feature, "")), quote=True)
         label = escape(LABELS.get(feature, feature))
+        field_id = f"{prefix}field-{index}"
         if feature in LIMITS:
             minimum, maximum = LIMITS[feature]
             attributes = f'type="number" min="{minimum}" max="{maximum}" step="any"'
         else:
             attributes = 'type="text"'
         fields.append(
-            f'<label for="field-{index}">{label}<input id="field-{index}" '
-            f'name="{escape(feature, quote=True)}" {attributes} value="{value}" required></label>'
+            f'<label for="{field_id}">{label}<input id="{field_id}" '
+            f'name="{escape(prefix + feature, quote=True)}" {attributes} value="{value}" required></label>'
         )
+    return "\n".join(fields)
+
+
+def render_page(values: dict | None = None, *, result: str | None = None, error: str | None = None) -> str:
+    values = DEFAULT_PATIENT if values is None else values
     if error:
         feedback = f'<section class="feedback error" role="alert"><h2>Check your details</h2><p>{escape(error)}</p></section>'
     elif result:
         feedback = f'<section class="feedback result" role="status"><p class="eyebrow">MODEL PREDICTION</p><h2>{escape(result)}</h2><p>This is an educational model output, not a diagnosis.</p></section>'
     else:
         feedback = '<section class="feedback"><h2>Start with an example</h2><p>The form contains sample values. Replace them with your own details, then select Predict.</p></section>'
-    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(
-        fields="\n".join(fields), feedback=feedback,
+    workspace = Template(TEMPLATE_PATH.with_name("web_patient_form.html").read_text(encoding="utf-8")).substitute(
+        fields=render_fields(values), feedback=feedback,
     )
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="layout")
+
+
+def render_comparison(values: dict | None = None, *, result: list[str] | None = None, error: str | None = None) -> str:
+    if values is None:
+        values = {prefix + key: value for prefix in ("a.", "b.") for key, value in DEFAULT_PATIENT.items()}
+    feedback = ""
+    if error:
+        message = str(error).replace("Patient 1:", "Profile A:").replace("Patient 2:", "Profile B:")
+        feedback = f'<section class="feedback error" role="alert"><h2>Check your profiles</h2><p>{escape(message)}</p></section>'
+    elif result:
+        cards = "".join(
+            f'<section class="feedback result"><p class="eyebrow">PROFILE {label}</p><h2>{escape(prediction)}</h2></section>'
+            for label, prediction in zip(("A", "B"), result, strict=True)
+        )
+        changes = []
+        for feature in RAW_FEATURES:
+            first, second = str(values.get("a." + feature, "")), str(values.get("b." + feature, ""))
+            if first != second:
+                changes.append(f'<tr><th scope="row">{escape(LABELS.get(feature, feature))}</th><td>{escape(first)}</td><td>{escape(second)}</td></tr>')
+        summary = "Both profiles received the same predicted class." if result[0] == result[1] else "The profiles received different predicted classes."
+        differences = (
+            '<div class="table-scroll"><table><caption>Edited fields</caption><thead><tr><th scope="col">Field</th><th scope="col">Profile A</th><th scope="col">Profile B</th></tr></thead><tbody>'
+            + "".join(changes) + "</tbody></table></div>"
+        ) if changes else "<p>The profiles have identical entries.</p>"
+        feedback = f'<section role="status"><div class="profile-grid">{cards}</div><p>{summary}</p>{differences}</section>'
+    workspace = Template(TEMPLATE_PATH.with_name("web_compare.html").read_text(encoding="utf-8")).substitute(
+        first=render_fields(values, "a."), second=render_fields(values, "b."), feedback=feedback,
+    )
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="comparison")
+
+
+def parse_form_patient(values: dict, prefix: str = "") -> dict:
+    patient = {feature: values.get(prefix + feature, "") for feature in RAW_FEATURES}
+    for feature in CSV_NUMERIC_FEATURES:
+        try:
+            patient[feature] = float(patient[feature])
+        except ValueError as error:
+            label = {"a.": "Profile A: ", "b.": "Profile B: "}.get(prefix, "")
+            raise ValueError(f"{label}'{feature}' must be a number.") from error
+    return patient
 
 
 def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> ThreadingHTTPServer:
@@ -99,6 +145,8 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 self.respond(403, "Local requests only.")
             elif self.path == "/":
                 self.respond(200, render_page())
+            elif self.path == "/compare":
+                self.respond(200, render_comparison())
             elif self.path == "/example.csv":
                 self.respond(200, EXAMPLE_CSV_PATH.read_text(encoding="utf-8"),
                              content_type="text/csv; charset=utf-8", filename="example-patients.csv")
@@ -112,13 +160,14 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
             if self.path == "/batch":
                 self.batch_predict()
                 return
-            if self.path != "/predict":
+            if self.path not in ("/predict", "/compare"):
                 self.respond(404, "Page not found.")
                 return
             if self.headers.get_content_type() != "application/x-www-form-urlencoded":
                 self.respond(415, "Submit the patient form as URL-encoded data.")
                 return
             values = {}
+            renderer = render_comparison if self.path == "/compare" else render_page
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 16384:
@@ -128,20 +177,18 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 if any(len(items) != 1 for items in fields.values()):
                     raise ValueError("Each field must be submitted exactly once.")
                 values = {key: items[0] for key, items in fields.items()}
-                patient = dict(values)
-                for feature in CSV_NUMERIC_FEATURES:
-                    try:
-                        patient[feature] = float(values.get(feature, ""))
-                    except ValueError as error:
-                        raise ValueError(f"'{feature}' must be a number.") from error
-                result = predict(patient, model_path)
+                if self.path == "/compare":
+                    patients = [parse_form_patient(values, prefix) for prefix in ("a.", "b.")]
+                    result = predict_many(patients, model_path)
+                else:
+                    result = predict(parse_form_patient(values), model_path)
             except (ValueError, TypeError, UnicodeError) as error:
-                self.respond(400, render_page(values, error=str(error)))
+                self.respond(400, renderer(values, error=str(error)))
                 return
             except OSError:
-                self.respond(503, render_page(values, error="The model could not be loaded. Check the server's model path."))
+                self.respond(503, renderer(values, error="The model could not be loaded. Check the server's model path."))
                 return
-            self.respond(200, render_page(values, result=result))
+            self.respond(200, renderer(values, result=result))
 
         def batch_predict(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":

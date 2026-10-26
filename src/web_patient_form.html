@@ -1,0 +1,20 @@
+<form action="/predict" method="post">
+  <h2>Patient details</h2>
+  <p class="hint">Use Normal, Normal Weight, Overweight, or Obese for BMI category. All fields are required.</p>
+  <div class="fields">$fields</div>
+  <button type="submit">Predict sleep class →</button>
+</form>
+<aside>
+  $feedback
+  <form class="batch" action="/batch" method="post" enctype="multipart/form-data">
+    <h2>Predict a whole CSV</h2>
+    <p class="hint">Upload patient rows and download a CSV with predictions. Record IDs and other columns are preserved.</p>
+    <label for="batch-file">Patient CSV · up to 2 MiB including upload overhead
+      <input id="batch-file" type="file" name="patients" accept=".csv,text/csv" required>
+    </label>
+    <button type="submit">Download predictions ↓</button>
+    <p class="hint"><a href="/example.csv" download>Download an example CSV</a></p>
+  </form>
+  <p class="privacy">Runs locally. The server does not store your entries or send them to an external service.</p>
+  <p class="limits">Trained on a small synthetic dataset. This model has not been clinically validated.</p>
+</aside>
