@@ -31,6 +31,13 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
+      - name: Run documented example workflows
+        run: |
+          python -m src.predict --input-json examples/patient.json --validate-only
+          python -m src.predict --input-json examples/patient.json --output-json "$RUNNER_TEMP/example-predictions.json"
+          python -m src.predict --input-csv examples/patients.csv --output-csv "$RUNNER_TEMP/example-predictions.csv"
+          python -m src.model_info --include-features > "$RUNNER_TEMP/example-model-info.json"
+
   security:
     name: Security
     runs-on: ubuntu-latest
