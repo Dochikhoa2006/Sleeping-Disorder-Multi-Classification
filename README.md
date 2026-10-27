@@ -78,6 +78,7 @@ sleep-disorder-classification/
 │   ├── web_ui.html
 │   ├── web_patient_form.html
 │   ├── web_compare.html
+│   ├── web_model.html
 │   └── preprocessing.py
 ├── tests/
 │   ├── test_prediction.py
@@ -251,6 +252,12 @@ two profiles side by side. The results show each predicted class and a table
 of the fields entered differently. Both profiles must pass validation before
 either prediction runs. Comparisons describe model outputs, not causal
 effects of lifestyle changes.
+
+The **Model dashboard** at **http://127.0.0.1:8765/model** shows the current
+model's class labels, training and holdout row counts, stored cross-validation
+scores, dependency versions, and file fingerprint. The selected classifier is
+marked in the score table. Use **Download model details** to export the same
+information as JSON. Models without stored metadata show **Not recorded**.
 
 For batch prediction, use **Predict a whole CSV** to choose a UTF-8 patient
 CSV and download `sleep-predictions.csv`. The output preserves input columns

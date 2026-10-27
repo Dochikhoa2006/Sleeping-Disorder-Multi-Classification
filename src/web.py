@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
+import math
 from email import policy
 from email.parser import BytesParser
 from html import escape
@@ -18,6 +20,7 @@ from src.predict import (
     predict, predict_many, read_patient_csv,
 )
 from src.preprocessing import RAW_FEATURES
+from src.model_info import inspect_model
 
 TEMPLATE_PATH = Path(__file__).with_name("web_ui.html")
 EXAMPLE_CSV_PATH = Path(__file__).resolve().parents[1] / "examples" / "patients.csv"
@@ -114,6 +117,56 @@ def parse_form_patient(values: dict, prefix: str = "") -> dict:
     return patient
 
 
+def render_model(report: dict | None = None, *, error: str | None = None) -> str:
+    if error:
+        workspace = f'<section class="feedback error" role="alert"><h2>Model details unavailable</h2><p>{escape(error)}</p></section>'
+    else:
+        metadata = report.get("training_metadata") or {}
+        results = report.get("cross_validation") or {}
+
+        def display(value) -> str:
+            return escape(str(value)) if value is not None else "Not recorded"
+
+        def score(value, *, meter_label=None) -> str:
+            if not isinstance(value, (int, float)) or not math.isfinite(value):
+                return "Not recorded"
+            text = f"{value:.3f}"
+            if meter_label is not None and 0 <= value <= 1:
+                text += f'<meter min="0" max="1" value="{value}" aria-label="{escape(meter_label, quote=True)}">{text}</meter>'
+            return text
+
+        rows = []
+        for name, metrics in results.items():
+            selected = '<span class="model-badge">Selected</span>' if name == report.get("model_name") else ""
+            rows.append(
+                f'<tr><th scope="row">{display(name)} {selected}</th>'
+                f'<td>{score(metrics.get("f1_macro"), meter_label=str(name) + " macro F1")}</td>'
+                f'<td>{score(metrics.get("accuracy"), meter_label=str(name) + " accuracy")}</td>'
+                f'<td>{score(metrics.get("accuracy_fold_std"))}</td></tr>'
+            )
+        scores = (
+            '<div class="table-scroll"><table><caption>Stored cross-validation results</caption>'
+            '<thead><tr><th scope="col">Model</th><th scope="col">Macro F1</th><th scope="col">Accuracy</th><th scope="col">Accuracy fold SD</th></tr></thead>'
+            '<tbody>' + "".join(rows) + '</tbody></table></div>'
+        ) if rows else '<p class="hint">No cross-validation results were stored with this model.</p>'
+        details = "".join(
+            f'<dt>{label}</dt><dd>{display(metadata.get(key))}</dd>' for key, label in (
+                ("selection_metric", "Selection metric"), ("validation", "Validation method"),
+                ("scikit_learn_version", "scikit-learn version"), ("pandas_version", "pandas version"),
+                ("numpy_version", "NumPy version"), ("joblib_version", "Joblib version"),
+            )
+        )
+        workspace = Template(TEMPLATE_PATH.with_name("web_model.html").read_text(encoding="utf-8")).substitute(
+            model=display(report.get("model_name")),
+            classes="".join(f'<span class="model-badge">{display(label)}</span>' for label in report.get("labels", [])),
+            training_rows=display(metadata.get("training_rows")),
+            holdout_rows=display(metadata.get("holdout_rows")),
+            groups=display(metadata.get("unique_feature_groups")),
+            scores=scores, details=details, fingerprint=display(report.get("model_sha256")),
+        )
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
+
+
 def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args) -> None:
@@ -147,6 +200,16 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 self.respond(200, render_page())
             elif self.path == "/compare":
                 self.respond(200, render_comparison())
+            elif self.path in ("/model", "/model.json"):
+                try:
+                    report = inspect_model(model_path)
+                    if self.path == "/model.json":
+                        self.respond(200, json.dumps(report, indent=2, allow_nan=False) + "\n",
+                                     content_type="application/json; charset=utf-8", filename="model-info.json")
+                    else:
+                        self.respond(200, render_model(report))
+                except (OSError, ValueError, TypeError, AttributeError):
+                    self.respond(503, render_model(error="Check the server's model file and try again."))
             elif self.path == "/example.csv":
                 self.respond(200, EXAMPLE_CSV_PATH.read_text(encoding="utf-8"),
                              content_type="text/csv; charset=utf-8", filename="example-patients.csv")

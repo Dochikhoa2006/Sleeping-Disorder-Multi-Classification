@@ -1,0 +1,24 @@
+<section class="model-heading">
+  <div>
+    <p class="eyebrow">SAVED MODEL</p>
+    <h2>$model</h2>
+    <p class="hint">Details read directly from the model used by this app.</p>
+    <div class="model-classes">$classes</div>
+  </div>
+  <a class="download-link" href="/model.json" download>Download model details ↓</a>
+</section>
+<section class="model-stats" aria-label="Training dataset partitions">
+  <article><p>Training rows</p><strong>$training_rows</strong></article>
+  <article><p>Reserved holdout rows</p><strong>$holdout_rows</strong></article>
+  <article><p>Unique training profiles</p><strong>$groups</strong></article>
+</section>
+<section class="model-panel">
+  $scores
+  <p class="hint">Cross-validation estimates from the training partition. Fold standard deviations are not confidence intervals. These scores do not establish clinical validity.</p>
+</section>
+<section class="model-panel">
+  <h2>Training &amp; reproducibility</h2>
+  <dl class="model-details">$details</dl>
+  <p class="eyebrow">MODEL SHA-256</p>
+  <code class="fingerprint">$fingerprint</code>
+</section>

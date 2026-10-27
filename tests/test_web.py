@@ -1,5 +1,6 @@
 import http.client
 import csv
+import json
 import re
 from io import StringIO
 import threading
@@ -9,9 +10,64 @@ from unittest.mock import patch
 
 from src.predict import PREDICTION_COLUMN, predict, predict_many
 from src.web import DEFAULT_PATIENT, MAX_UPLOAD_BYTES, make_server
+from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    def test_model_dashboard_displays_the_actual_saved_model_results(self) -> None:
+        report = inspect_model()
+        status, _, body = self.request("GET", "/model")
+        self.assertEqual(status, 200)
+        self.assertIn(f'<h2>{report["model_name"]}</h2>', body)
+        self.assertIn(report["model_sha256"], body)
+        self.assertIn(str(report["training_metadata"]["training_rows"]), body)
+        for name, metrics in report["cross_validation"].items():
+            self.assertIn(name, body)
+            self.assertIn(f'{metrics["f1_macro"]:.3f}', body)
+        self.assertIn("Selected</span>", body)
+        self.assertIn('href="/model.json"', body)
+        self.assertIn("not confidence intervals", body)
+
+    def test_model_details_download_matches_model_inspection(self) -> None:
+        status, headers, body = self.request("GET", "/model.json")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "application/json; charset=utf-8")
+        self.assertIn('filename="model-info.json"', headers["Content-Disposition"])
+        self.assertEqual(json.loads(body), inspect_model())
+
+    def test_dashboard_handles_models_without_training_metadata(self) -> None:
+        report = {"model_name": "Custom classifier", "labels": ["Healthy"],
+                  "model_sha256": "example-fingerprint", "training_metadata": None,
+                  "cross_validation": None}
+        with patch("src.web.inspect_model", return_value=report):
+            status, _, body = self.request("GET", "/model")
+        self.assertEqual(status, 200)
+        self.assertIn("Not recorded", body)
+        self.assertIn("No cross-validation results were stored", body)
+        self.assertNotIn("Selected</span>", body)
+
+    def test_dashboard_escapes_model_supplied_text(self) -> None:
+        report = {"model_name": "<script>bad()</script>", "labels": ["<img src=x>"],
+                  "training_metadata": {"validation": "<b>untrusted</b>"},
+                  "cross_validation": {"<svg>": {"f1_macro": 0.5, "accuracy": 0.6}}}
+        with patch("src.web.inspect_model", return_value=report):
+            status, _, body = self.request("GET", "/model")
+        self.assertEqual(status, 200)
+        self.assertIn("&lt;script&gt;", body)
+        self.assertIn("&lt;svg&gt;", body)
+        self.assertNotIn("<script>", body)
+        self.assertNotIn("<img", body)
+        self.assertNotIn("<svg>", body)
+
+    def test_model_read_failures_show_a_dashboard_error(self) -> None:
+        with patch("src.web.inspect_model", side_effect=OSError("private filesystem details")):
+            for path in ("/model", "/model.json"):
+                with self.subTest(path=path):
+                    status, _, body = self.request("GET", path)
+                    self.assertEqual(status, 503)
+                    self.assertIn("Model details unavailable", body)
+                    self.assertNotIn("private filesystem details", body)
+
     @staticmethod
     def comparison_values(first=None, second=None):
         return {prefix + key: value for prefix, patient in (
