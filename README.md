@@ -79,6 +79,7 @@ sleep-disorder-classification/
 │   ├── web_patient_form.html
 │   ├── web_compare.html
 │   ├── web_model.html
+│   ├── web_report.html
 │   └── preprocessing.py
 ├── tests/
 │   ├── test_prediction.py
@@ -246,6 +247,11 @@ entries show an explanation and retain your values for correction. The server
 binds only to this computer; entries are not stored or sent to external
 services. Stop it with Ctrl+C. Optional `--port` and `--model` arguments select
 a different port or trusted model file.
+
+Use **Open printable report** to open the current form values and a fresh
+prediction in a separate tab. The report includes all submitted features and
+a UTC generation time. Use the browser's Print command to print it or save it
+as PDF. The report is generated in memory; the server does not keep a copy.
 
 Select **Compare profiles** (or open **http://127.0.0.1:8765/compare**) to edit
 two profiles side by side. The results show each predicted class and a table

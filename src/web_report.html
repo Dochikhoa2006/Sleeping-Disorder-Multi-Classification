@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Educational prediction report · Sleep &amp; lifestyle</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 36px 24px; font: 15px/1.5 system-ui, sans-serif; color: #18342f; background: #f5f4ef; }
+    main { max-width: 760px; margin: auto; background: white; padding: 36px; border: 1px solid #d5ddd6; border-radius: 14px; }
+    .eyebrow { font-size: 11px; letter-spacing: .15em; font-weight: 700; }
+    h1 { font-size: 30px; line-height: 1.2; margin: 14px 0; letter-spacing: -.04em; }
+    h2 { font-size: 30px; margin: 4px 0; }
+    .generated { color: #65756d; font-size: 12px; }
+    .result { margin: 24px 0; padding: 20px; background: #dcefe4; border: 1px solid #94c6ad; border-radius: 10px; }
+    .result p { margin: 0; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+    caption { text-align: left; font-weight: 700; font-size: 18px; margin-bottom: 12px; }
+    th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid #d5ddd6; vertical-align: top; overflow-wrap: anywhere; }
+    th { width: 55%; font-weight: 600; }
+    footer { margin-top: 24px; color: #53675e; font-size: 12px; }
+    .no-print { max-width: 760px; margin: 0 auto 20px; font-size: 13px; }
+    a { color: #1d6651; text-underline-offset: 3px; }
+    @page { size: A4; margin: 18mm; }
+    @media print {
+      body { padding: 0; color: black; background: white; font-size: 11pt; }
+      main { padding: 0; border: 0; border-radius: 0; max-width: none; }
+      .no-print { display: none; }
+      .result { background: white; border-color: #777; }
+      tr, .result, footer { break-inside: avoid; }
+    }
+    @media (max-width: 480px) { body { padding: 16px; } main { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <p class="no-print">Use your browser’s Print command (Ctrl+P or ⌘P) to print or save as PDF. <a href="/">Return to the patient form</a>.</p>
+  <main>
+    <header>
+      <p class="eyebrow">SLEEP HEALTH / MODEL EXPLORER</p>
+      <h1>Educational prediction report</h1>
+      <p class="generated">Generated (UTC): <time>$generated</time></p>
+    </header>
+    <section class="result" aria-label="Model prediction">
+      <p class="eyebrow">PREDICTED CLASS</p>
+      <h2>$result</h2>
+      <p>Model output, not a diagnosis.</p>
+    </section>
+    <table><caption>Submitted patient details</caption><tbody>$rows</tbody></table>
+    <footer>
+      <p>This model was trained on a small synthetic dataset and has not been clinically validated. Predictions are not medical advice or a diagnosis.</p>
+      <p>The server does not store this report. A printed or saved copy contains the patient details shown above.</p>
+    </footer>
+  </main>
+</body>
+</html>

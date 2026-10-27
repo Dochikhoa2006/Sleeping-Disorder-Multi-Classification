@@ -2,6 +2,7 @@ import http.client
 import csv
 import json
 import re
+from datetime import datetime
 from io import StringIO
 import threading
 import unittest
@@ -14,6 +15,53 @@ from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    def test_patient_form_offers_report_for_current_values_in_a_new_tab(self) -> None:
+        status, _, body = self.request("GET")
+        self.assertEqual(status, 200)
+        self.assertIn('formaction="/report" formtarget="_blank"', body)
+        self.assertIn("runs a fresh prediction", body)
+
+    def test_printable_report_contains_prediction_all_inputs_and_utc_timestamp(self) -> None:
+        patient = {**DEFAULT_PATIENT, "Age": 55}
+        status, headers, body = self.request("POST", "/report", urlencode(patient), {
+            "Content-Type": "application/x-www-form-urlencoded",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertIn("<h1>Educational prediction report</h1>", body)
+        self.assertIn(f"<h2>{predict(patient)}</h2>", body)
+        self.assertEqual(body.count('<th scope="row">'), 11)
+        self.assertIn('<th scope="row">Age</th><td>55</td>', body)
+        self.assertIn("Software Engineer", body)
+        self.assertIn("@media print", body)
+        self.assertNotIn("<form", body)
+        generated = datetime.fromisoformat(re.search(r"<time>([^<]+)</time>", body).group(1))
+        self.assertEqual(generated.utcoffset().total_seconds(), 0)
+        self.assertIn("not medical advice or a diagnosis", body)
+
+    def test_report_rejects_invalid_input_before_loading_model(self) -> None:
+        with patch("src.predict.joblib.load") as load_model:
+            status, _, body = self.request("POST", "/report", urlencode({**DEFAULT_PATIENT, "Age": 0}), {
+                "Content-Type": "application/x-www-form-urlencoded",
+            })
+        load_model.assert_not_called()
+        self.assertEqual(status, 400)
+        self.assertIn('role="alert"', body)
+        self.assertNotIn("<h1>Educational prediction report</h1>", body)
+
+    def test_reports_escape_patient_text_and_cannot_be_read_back_via_get(self) -> None:
+        patient = {**DEFAULT_PATIENT, "Occupation": "<script>bad()</script>"}
+        status, _, body = self.request("POST", "/report", urlencode(patient), {
+            "Content-Type": "application/x-www-form-urlencoded",
+        })
+        self.assertEqual(status, 200)
+        self.assertIn("&lt;script&gt;", body)
+        self.assertNotIn("<script>", body)
+        self.assertEqual(self.request("GET", "/report")[0], 404)
+        self.assertEqual(self.request("POST", "/report", urlencode(patient), {
+            "Origin": "https://example.com", "Content-Type": "application/x-www-form-urlencoded",
+        })[0], 403)
+
     def test_model_dashboard_displays_the_actual_saved_model_results(self) -> None:
         report = inspect_model()
         status, _, body = self.request("GET", "/model")

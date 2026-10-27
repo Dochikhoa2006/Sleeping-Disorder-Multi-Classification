@@ -50,6 +50,8 @@
     input:focus { outline: 3px solid #b8dfcf; outline-offset: 1px; }
     button { margin-top: 26px; background: #1d6651; border: 0; border-radius: 9px; color: white; padding: 14px 23px; font: inherit; font-weight: 650; cursor: pointer; }
     button:hover { background: #174d3e; }
+    .secondary-button { background: transparent; color: #1d6651; border: 1px solid #1d6651; margin-left: 8px; }
+    .secondary-button:hover { background: #e7ece3; }
     button:focus-visible { outline: 3px solid #74b79b; outline-offset: 3px; }
     .feedback { background: #e7ece3; padding: 26px; border-radius: 16px; }
     .feedback p { font-size: 14px; }
@@ -64,7 +66,7 @@
     .privacy, .limits { padding: 8px 4px; font-size: 13px; color: #65756d; }
     footer { border-top: 1px solid #d5ddd6; margin-top: 34px; padding-top: 20px; color: #65756d; font-size: 12px; }
     @media (max-width: 760px) { main { padding: 28px 18px; } .layout, .profile-grid { grid-template-columns: 1fr; } form { padding: 22px; } fieldset + fieldset { border-top: 1px solid #d5ddd6; padding-top: 24px; } }
-    @media (max-width: 460px) { .fields { grid-template-columns: 1fr; } }
+    @media (max-width: 460px) { .fields { grid-template-columns: 1fr; } .secondary-button { margin-left: 0; } }
     @media (max-width: 760px) { .model-heading { flex-direction: column; } .model-stats { grid-template-columns: 1fr; } .model-details { grid-template-columns: 1fr; gap: 5px; } .model-details dd { margin-bottom: 12px; } }
   </style>
 </head>

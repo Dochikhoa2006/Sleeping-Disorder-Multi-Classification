@@ -6,6 +6,7 @@ import argparse
 import csv
 import json
 import math
+from datetime import datetime, timezone
 from email import policy
 from email.parser import BytesParser
 from html import escape
@@ -167,6 +168,18 @@ def render_model(report: dict | None = None, *, error: str | None = None) -> str
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
 
+def render_patient_report(values: dict, result: str) -> str:
+    rows = "".join(
+        f'<tr><th scope="row">{escape(LABELS.get(feature, feature))}</th>'
+        f'<td>{escape(str(values.get(feature, "")))}</td></tr>'
+        for feature in RAW_FEATURES
+    )
+    return Template(TEMPLATE_PATH.with_name("web_report.html").read_text(encoding="utf-8")).substitute(
+        result=escape(result), rows=rows,
+        generated=escape(datetime.now(timezone.utc).isoformat(timespec="seconds")),
+    )
+
+
 def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args) -> None:
@@ -223,7 +236,7 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
             if self.path == "/batch":
                 self.batch_predict()
                 return
-            if self.path not in ("/predict", "/compare"):
+            if self.path not in ("/predict", "/compare", "/report"):
                 self.respond(404, "Page not found.")
                 return
             if self.headers.get_content_type() != "application/x-www-form-urlencoded":
@@ -251,7 +264,10 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
             except OSError:
                 self.respond(503, renderer(values, error="The model could not be loaded. Check the server's model path."))
                 return
-            self.respond(200, renderer(values, result=result))
+            if self.path == "/report":
+                self.respond(200, render_patient_report(values, result))
+            else:
+                self.respond(200, renderer(values, result=result))
 
         def batch_predict(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":
