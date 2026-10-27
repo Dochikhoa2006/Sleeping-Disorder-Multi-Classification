@@ -18,7 +18,7 @@ from urllib.parse import parse_qs
 
 from src.predict import (
     CSV_NUMERIC_FEATURES, DEFAULT_MODEL_PATH, PREDICTION_COLUMN,
-    predict, predict_many, read_patient_csv,
+    predict, predict_many, read_patient_csv, read_patient_json, validate_patient,
 )
 from src.preprocessing import RAW_FEATURES
 from src.model_info import inspect_model
@@ -64,12 +64,14 @@ def render_fields(values: dict, prefix: str = "") -> str:
     return "\n".join(fields)
 
 
-def render_page(values: dict | None = None, *, result: str | None = None, error: str | None = None) -> str:
+def render_page(values: dict | None = None, *, result: str | None = None, error: str | None = None, notice: str | None = None) -> str:
     values = DEFAULT_PATIENT if values is None else values
     if error:
         feedback = f'<section class="feedback error" role="alert"><h2>Check your details</h2><p>{escape(error)}</p></section>'
     elif result:
         feedback = f'<section class="feedback result" role="status"><p class="eyebrow">MODEL PREDICTION</p><h2>{escape(result)}</h2><p>This is an educational model output, not a diagnosis.</p></section>'
+    elif notice:
+        feedback = f'<section class="feedback" role="status"><h2>Profile loaded</h2><p>{escape(notice)}</p></section>'
     else:
         feedback = '<section class="feedback"><h2>Start with an example</h2><p>The form contains sample values. Replace them with your own details, then select Predict.</p></section>'
     workspace = Template(TEMPLATE_PATH.with_name("web_patient_form.html").read_text(encoding="utf-8")).substitute(
@@ -180,6 +182,24 @@ def render_patient_report(values: dict, result: str) -> str:
     )
 
 
+def uploaded_file(content_type: str, body: bytes, field_name: str) -> bytes:
+    message = BytesParser(policy=policy.default).parsebytes(
+        f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("ascii") + body
+    )
+    if not message.is_multipart() or any(part.defects for part in message.walk()):
+        raise ValueError("The upload is incomplete or malformed. Choose the file again.")
+    parts = list(message.iter_parts())
+    if len(parts) != 1 or parts[0].get_param("name", header="content-disposition") != field_name:
+        raise ValueError("Upload exactly one file using the matching upload form.")
+    upload = parts[0]
+    if not upload.get_filename():
+        raise ValueError("Choose a file to upload.")
+    payload = upload.get_payload(decode=True)
+    if payload is None:
+        raise ValueError("The uploaded file is empty or malformed.")
+    return payload
+
+
 def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args) -> None:
@@ -236,7 +256,10 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
             if self.path == "/batch":
                 self.batch_predict()
                 return
-            if self.path not in ("/predict", "/compare", "/report"):
+            if self.path == "/import-profile":
+                self.import_profile()
+                return
+            if self.path not in ("/predict", "/compare", "/report", "/profile.json"):
                 self.respond(404, "Page not found.")
                 return
             if self.headers.get_content_type() != "application/x-www-form-urlencoded":
@@ -253,6 +276,12 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 if any(len(items) != 1 for items in fields.values()):
                     raise ValueError("Each field must be submitted exactly once.")
                 values = {key: items[0] for key, items in fields.items()}
+                if self.path == "/profile.json":
+                    patient = parse_form_patient(values)
+                    validate_patient(patient)
+                    self.respond(200, json.dumps(patient, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
+                                 content_type="application/json; charset=utf-8", filename="patient-profile.json")
+                    return
                 if self.path == "/compare":
                     patients = [parse_form_patient(values, prefix) for prefix in ("a.", "b.")]
                     result = predict_many(patients, model_path)
@@ -278,22 +307,7 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 if not 0 < length <= MAX_UPLOAD_BYTES:
                     self.respond(413, render_page(error="Choose a CSV smaller than 2 MiB, including upload overhead."))
                     return
-                content_type = self.headers.get("Content-Type", "")
-                message = BytesParser(policy=policy.default).parsebytes(
-                    f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("ascii")
-                    + self.rfile.read(length)
-                )
-                if not message.is_multipart() or any(part.defects for part in message.walk()):
-                    raise ValueError("The upload is incomplete or malformed. Choose the CSV again.")
-                parts = list(message.iter_parts())
-                if len(parts) != 1 or parts[0].get_param("name", header="content-disposition") != "patients":
-                    raise ValueError("Upload exactly one patient CSV file.")
-                upload = parts[0]
-                if not upload.get_filename():
-                    raise ValueError("Choose a CSV file to upload.")
-                payload = upload.get_payload(decode=True)
-                if payload is None:
-                    raise ValueError("The uploaded file is empty or malformed.")
+                payload = uploaded_file(self.headers.get("Content-Type", ""), self.rfile.read(length), "patients")
                 columns, rows, patients = read_patient_csv(StringIO(payload.decode("utf-8-sig"), newline=""))
                 predictions = predict_many(patients, model_path)
                 output = StringIO(newline="")
@@ -308,6 +322,25 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 self.respond(503, render_page(error="The model could not be loaded. Check the server's model path."))
                 return
             self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8", filename="sleep-predictions.csv")
+
+        def import_profile(self) -> None:
+            if self.headers.get_content_type() != "multipart/form-data":
+                self.respond(415, render_page(error="Choose a JSON file using Load a saved profile."))
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= MAX_UPLOAD_BYTES:
+                    self.respond(413, render_page(error="Choose a profile smaller than 2 MiB, including upload overhead."))
+                    return
+                payload = uploaded_file(self.headers.get("Content-Type", ""), self.rfile.read(length), "profile")
+                patient = read_patient_json(StringIO(payload.decode("utf-8-sig")))
+                if not isinstance(patient, dict):
+                    raise ValueError("Import one patient JSON object, not a batch.")
+                validate_patient(patient)
+            except (ValueError, TypeError, UnicodeError) as error:
+                self.respond(400, render_page(error=str(error)))
+                return
+            self.respond(200, render_page(patient, notice="Review the restored details, then predict or edit them. No prediction has run yet."))
 
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 

@@ -253,6 +253,12 @@ prediction in a separate tab. The report includes all submitted features and
 a UTC generation time. Use the browser's Print command to print it or save it
 as PDF. The report is generated in memory; the server does not keep a copy.
 
+**Save profile** downloads the current valid form values as
+`patient-profile.json`, compatible with CLI JSON prediction. **Load a saved
+profile** restores a single JSON object to the form for review and editing.
+Saving and loading profiles do not run predictions or require loading a model.
+The server processes uploads in memory and keeps no profile library.
+
 Select **Compare profiles** (or open **http://127.0.0.1:8765/compare**) to edit
 two profiles side by side. The results show each predicted class and a table
 of the fields entered differently. Both profiles must pass validation before

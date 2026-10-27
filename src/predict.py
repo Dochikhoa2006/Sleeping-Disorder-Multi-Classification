@@ -37,7 +37,12 @@ def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def load_patient_json(path: Path) -> dict[str, Any] | list[dict[str, Any]]:
     with path.open(encoding="utf-8-sig") as input_file:
-        patient = json.load(input_file, object_pairs_hook=_unique_json_object)
+        return read_patient_json(input_file)
+
+
+def read_patient_json(input_file: TextIO) -> dict[str, Any] | list[dict[str, Any]]:
+    """Read a patient JSON stream with the same duplicate-field checks as files."""
+    patient = json.load(input_file, object_pairs_hook=_unique_json_object)
     if isinstance(patient, list):
         if not patient:
             raise ValueError("Patient JSON array must contain at least one object.")

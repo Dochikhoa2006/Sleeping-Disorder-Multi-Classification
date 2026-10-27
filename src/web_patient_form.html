@@ -4,10 +4,21 @@
   <div class="fields">$fields</div>
   <button type="submit">Predict sleep class →</button>
   <button class="secondary-button" type="submit" formaction="/report" formtarget="_blank">Open printable report ↗</button>
+  <button class="secondary-button" type="submit" formaction="/profile.json">Save profile ↓</button>
   <p class="hint">The report uses the current form values and runs a fresh prediction. It opens in a new tab for printing or saving as PDF.</p>
 </form>
 <aside>
   $feedback
+  <details class="profile-tools">
+    <summary>Load a saved profile</summary>
+    <form action="/import-profile" method="post" enctype="multipart/form-data">
+      <p class="hint">Restore one patient JSON file to the form. You can review or edit it before predicting.</p>
+      <label for="profile-file">Patient JSON · up to 2 MiB including upload overhead
+        <input id="profile-file" type="file" name="profile" accept=".json,application/json" required>
+      </label>
+      <button type="submit">Load profile →</button>
+    </form>
+  </details>
   <form class="batch" action="/batch" method="post" enctype="multipart/form-data">
     <h2>Predict a whole CSV</h2>
     <p class="hint">Upload patient rows and download a CSV with predictions. Record IDs and other columns are preserved.</p>

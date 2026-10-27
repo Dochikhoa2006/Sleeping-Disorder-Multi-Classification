@@ -9,12 +9,73 @@ import unittest
 from urllib.parse import urlencode
 from unittest.mock import patch
 
-from src.predict import PREDICTION_COLUMN, predict, predict_many
+from src.predict import PREDICTION_COLUMN, predict, predict_many, read_patient_json
 from src.web import DEFAULT_PATIENT, MAX_UPLOAD_BYTES, make_server
 from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    def test_profile_export_is_valid_cli_json_without_loading_a_model(self) -> None:
+        patient = {**DEFAULT_PATIENT, "Occupation": "Ingénieur"}
+        with patch("src.predict.joblib.load") as load_model:
+            status, headers, body = self.request("POST", "/profile.json", urlencode(patient), {
+                "Content-Type": "application/x-www-form-urlencoded",
+            })
+        load_model.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertIn('filename="patient-profile.json"', headers["Content-Disposition"])
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(read_patient_json(StringIO(body)), patient)
+
+    def test_saved_profile_can_be_restored_without_predicting(self) -> None:
+        patient = {**DEFAULT_PATIENT, "Age": 55, "Occupation": "Ingénieur"}
+        status, _, saved = self.request("POST", "/profile.json", urlencode(patient), {
+            "Content-Type": "application/x-www-form-urlencoded",
+        })
+        self.assertEqual(status, 200)
+        with patch("src.predict.joblib.load") as load_model:
+            status, _, body = self.upload(saved.encode("utf-8-sig"), field="profile", path="/import-profile")
+        load_model.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertIn("Profile loaded", body)
+        self.assertIn("No prediction has run yet", body)
+        self.assertIn('name="Age" type="number" min="1" max="120" step="any" value="55.0"', body)
+        self.assertIn('value="Ingénieur"', body)
+        self.assertNotIn("MODEL PREDICTION", body)
+
+    def test_profile_import_rejects_batches_duplicates_and_invalid_records(self) -> None:
+        for contents in ('[{"Age": 31}]', '{"Age": 31, "Age": 55}',
+                         json.dumps({**DEFAULT_PATIENT, "Age": 0}), 'not JSON'):
+            with self.subTest(contents=contents), patch("src.predict.joblib.load") as load_model:
+                status, _, body = self.upload(contents.encode(), field="profile", path="/import-profile")
+            load_model.assert_not_called()
+            self.assertEqual(status, 400)
+            self.assertIn('role="alert"', body)
+            self.assertNotIn("Profile loaded", body)
+
+    def test_imported_text_is_escaped_and_invalid_export_is_not_downloaded(self) -> None:
+        patient = {**DEFAULT_PATIENT, "Occupation": "<script>bad()</script>"}
+        status, _, body = self.upload(json.dumps(patient).encode(), field="profile", path="/import-profile")
+        self.assertEqual(status, 200)
+        self.assertIn("&lt;script&gt;", body)
+        self.assertNotIn("<script>", body)
+        status, headers, _ = self.request("POST", "/profile.json", urlencode({**patient, "Age": 0}), {
+            "Content-Type": "application/x-www-form-urlencoded",
+        })
+        self.assertEqual(status, 400)
+        self.assertNotIn("Content-Disposition", headers)
+
+    def test_profile_import_rejects_oversize_and_foreign_origin_uploads(self) -> None:
+        self.assertEqual(self.request("POST", "/import-profile", b"", {
+            "Content-Type": "multipart/form-data; boundary=test",
+            "Content-Length": str(MAX_UPLOAD_BYTES + 1),
+        })[0], 413)
+        self.assertEqual(self.request("POST", "/import-profile", b"{}", {
+            "Content-Type": "application/json",
+        })[0], 415)
+        for path in ("/import-profile", "/profile.json"):
+            self.assertEqual(self.request("POST", path, b"data", {"Origin": "https://example.com"})[0], 403)
+
     def test_patient_form_offers_report_for_current_values_in_a_new_tab(self) -> None:
         status, _, body = self.request("GET")
         self.assertEqual(status, 200)
@@ -203,14 +264,14 @@ class WebTests(unittest.TestCase):
             "Content-Type": "application/x-www-form-urlencoded",
         })
 
-    def upload(self, contents, *, duplicate=False):
+    def upload(self, contents, *, duplicate=False, field="patients", path="/batch"):
         boundary = "test-upload-boundary"
         part = (
-            f'--{boundary}\r\nContent-Disposition: form-data; name="patients"; filename="patients.csv"\r\n'
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{field}"; filename="upload"\r\n'
             'Content-Type: text/csv\r\n\r\n'
         ).encode() + contents + b"\r\n"
         body = part * (2 if duplicate else 1) + f"--{boundary}--\r\n".encode()
-        return self.request("POST", "/batch", body, {
+        return self.request("POST", path, body, {
             "Content-Type": f"multipart/form-data; boundary={boundary}",
         })
 
@@ -277,7 +338,7 @@ class WebTests(unittest.TestCase):
     def test_home_page_contains_complete_accessible_form(self) -> None:
         status, headers, body = self.request("GET")
         self.assertEqual(status, 200)
-        self.assertEqual(body.count("<input "), 12)
+        self.assertEqual(body.count("<input "), 13)
         self.assertIn('enctype="multipart/form-data"', body)
         self.assertIn('action="/predict"', body)
         self.assertIn('for="field-0"', body)
