@@ -1,4 +1,5 @@
 import http.client
+import base64
 import csv
 import json
 import re
@@ -15,6 +16,61 @@ from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    @staticmethod
+    def csv_source(rows):
+        source = StringIO(newline="")
+        writer = csv.DictWriter(source, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+        return source.getvalue().encode("utf-8-sig")
+
+    @staticmethod
+    def preview_download(body):
+        encoded = re.search(r'href="data:text/csv;charset=utf-8;base64,([^"]+)"', body).group(1)
+        return list(csv.DictReader(StringIO(base64.b64decode(encoded).decode("utf-8"), newline="")))
+
+    def test_batch_preview_shows_counts_and_downloads_matching_predictions(self) -> None:
+        patients = [DEFAULT_PATIENT, {**DEFAULT_PATIENT, "Age": 55, "Sleep Duration": 5.5}]
+        rows = [{**patient, "Record ID": f"row-{index}", "Notes": '<script>café</script>'}
+                for index, patient in enumerate(patients)]
+        expected = predict_many(patients)
+        status, headers, body = self.upload(self.csv_source(rows), path="/batch-preview")
+        self.assertEqual(status, 200)
+        self.assertNotIn("Content-Disposition", headers)
+        self.assertIn("Showing the first 2 of 2 records", body)
+        self.assertIn("&lt;script&gt;café&lt;/script&gt;", body)
+        self.assertNotIn("<script>", body)
+        for label in ("Healthy", "Insomnia", "Sleep Apnea"):
+            self.assertIn(f'<p>{label}</p><strong>{expected.count(label)}</strong>', body)
+        downloaded = self.preview_download(body)
+        self.assertEqual([row[PREDICTION_COLUMN] for row in downloaded], expected)
+        self.assertEqual([row["Record ID"] for row in downloaded], ["row-0", "row-1"])
+        self.assertEqual(downloaded[0]["Notes"], '<script>café</script>')
+
+    def test_preview_limits_visible_rows_but_keeps_the_entire_download(self) -> None:
+        rows = [{**DEFAULT_PATIENT, "Record ID": f"record-{index}"} for index in range(101)]
+        status, _, body = self.upload(self.csv_source(rows), path="/batch-preview")
+        self.assertEqual(status, 200)
+        self.assertIn("Showing the first 100 of 101 records", body)
+        self.assertEqual(body.count("<tr>"), 101)  # Header plus 100 patient rows.
+        self.assertNotIn("<td>record-100</td>", body)
+        downloaded = self.preview_download(body)
+        self.assertEqual(len(downloaded), 101)
+        self.assertEqual(downloaded[-1]["Record ID"], "record-100")
+        predicted = predict(DEFAULT_PATIENT)
+        self.assertIn(f'<p>{predicted}</p><strong>101</strong>', body)
+
+    def test_invalid_preview_has_no_results_or_download_and_is_not_stored(self) -> None:
+        rows = [DEFAULT_PATIENT, {**DEFAULT_PATIENT, "Age": 0}]
+        with patch("src.predict.joblib.load") as load_model:
+            status, _, body = self.upload(self.csv_source(rows), path="/batch-preview")
+        load_model.assert_not_called()
+        self.assertEqual(status, 400)
+        self.assertIn("CSV row 3", body)
+        self.assertNotIn("data:text/csv", body)
+        self.assertNotIn("Your results are ready", body)
+        self.assertEqual(self.request("GET", "/batch-preview")[0], 404)
+
     def test_profile_export_is_valid_cli_json_without_loading_a_model(self) -> None:
         patient = {**DEFAULT_PATIENT, "Occupation": "Ingénieur"}
         with patch("src.predict.joblib.load") as load_model:

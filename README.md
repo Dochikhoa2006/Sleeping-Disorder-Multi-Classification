@@ -80,6 +80,7 @@ sleep-disorder-classification/
 │   ├── web_compare.html
 │   ├── web_model.html
 │   ├── web_report.html
+│   ├── web_batch_results.html
 │   └── preprocessing.py
 ├── tests/
 │   ├── test_prediction.py
@@ -277,6 +278,11 @@ and row order and adds `Predicted Sleep Disorder`. An example CSV is available
 from the interface. Uploads, including form overhead, are limited to 2 MiB and
 processed in memory. Every row is validated before prediction; an invalid file
 shows an error instead of downloading partial results.
+
+**Preview results** shows class counts for the whole batch and the first 100
+rows in input order. Download the complete CSV from that page, including rows
+beyond the preview. **Download CSV directly** skips the preview. Results stay
+in the browser response; the server does not keep a batch history.
 
 ### Command-line prediction
 

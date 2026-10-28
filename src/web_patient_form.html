@@ -19,13 +19,14 @@
       <button type="submit">Load profile →</button>
     </form>
   </details>
-  <form class="batch" action="/batch" method="post" enctype="multipart/form-data">
+  <form id="batch-upload" class="batch" action="/batch-preview" method="post" enctype="multipart/form-data">
     <h2>Predict a whole CSV</h2>
-    <p class="hint">Upload patient rows and download a CSV with predictions. Record IDs and other columns are preserved.</p>
+    <p class="hint">Preview patient predictions and class counts, then download the results. Record IDs and other columns are preserved.</p>
     <label for="batch-file">Patient CSV · up to 2 MiB including upload overhead
       <input id="batch-file" type="file" name="patients" accept=".csv,text/csv" required>
     </label>
-    <button type="submit">Download predictions ↓</button>
+    <button type="submit">Preview results →</button>
+    <button class="secondary-button" type="submit" formaction="/batch">Download CSV directly ↓</button>
     <p class="hint"><a href="/example.csv" download>Download an example CSV</a></p>
   </form>
   <p class="privacy">Runs locally. The server does not store your entries or send them to an external service.</p>

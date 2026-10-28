@@ -1,0 +1,18 @@
+<section class="model-heading">
+  <div>
+    <p class="eyebrow">BATCH PREDICTIONS</p>
+    <h2>Your results are ready.</h2>
+    <p><strong>$total</strong> records processed. All rows passed input validation.</p>
+  </div>
+  <a class="download-link" href="data:text/csv;charset=utf-8;base64,$download" download="sleep-predictions.csv">Download all $total predictions ↓</a>
+</section>
+<section class="model-stats" aria-label="Prediction counts by class">$cards</section>
+<section class="model-panel">
+  <h2>Review the predictions</h2>
+  <p class="hint">Showing the first $shown of $total records in input order. The download contains every record and its original columns.</p>
+  <div class="table-scroll batch-preview" tabindex="0" role="region" aria-label="Scrollable prediction results">
+    <table><caption>Patient rows and predicted classes</caption><thead><tr>$headers</tr></thead><tbody>$rows</tbody></table>
+  </div>
+</section>
+<p class="privacy">The server does not store these results. Keep this page open until you have downloaded the CSV.</p>
+<p><a href="/#batch-upload">Upload another CSV →</a></p>

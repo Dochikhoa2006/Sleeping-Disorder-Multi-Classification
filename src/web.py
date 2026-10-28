@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+from collections import Counter
 import csv
 import json
 import math
@@ -26,6 +28,7 @@ from src.model_info import inspect_model
 TEMPLATE_PATH = Path(__file__).with_name("web_ui.html")
 EXAMPLE_CSV_PATH = Path(__file__).resolve().parents[1] / "examples" / "patients.csv"
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024
+PREVIEW_ROWS = 100
 DEFAULT_PATIENT = {
     "Gender": "Male", "Age": 31, "Occupation": "Software Engineer",
     "Sleep Duration": 7.2, "Quality of Sleep": 8,
@@ -200,6 +203,27 @@ def uploaded_file(content_type: str, body: bytes, field_name: str) -> bytes:
     return payload
 
 
+def render_batch_results(columns: list[str], rows: list[dict], predictions: list[str], csv_content: str) -> str:
+    counts = Counter(predictions)
+    labels = dict.fromkeys(["Healthy", "Insomnia", "Sleep Apnea", *predictions])
+    cards = "".join(
+        f'<article><p>{escape(label)}</p><strong>{counts[label]}</strong></article>' for label in labels
+    )
+    headers = '<th scope="col">CSV row</th>' + "".join(
+        f'<th scope="col">{escape(column)}</th>' for column in [*columns, PREDICTION_COLUMN]
+    )
+    table_rows = []
+    for index, (row, prediction) in enumerate(zip(rows[:PREVIEW_ROWS], predictions[:PREVIEW_ROWS], strict=True), start=2):
+        cells = "".join(f'<td>{escape(str(row[column]))}</td>' for column in columns)
+        table_rows.append(f'<tr><th scope="row">{index}</th>{cells}<td>{escape(prediction)}</td></tr>')
+    workspace = Template(TEMPLATE_PATH.with_name("web_batch_results.html").read_text(encoding="utf-8")).substitute(
+        total=len(rows), shown=min(len(rows), PREVIEW_ROWS), cards=cards,
+        headers=headers, rows="".join(table_rows),
+        download=base64.b64encode(csv_content.encode("utf-8")).decode("ascii"),
+    )
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
+
+
 def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args) -> None:
@@ -253,7 +277,7 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
             if not self.local_request():
                 self.respond(403, "Local requests only.")
                 return
-            if self.path == "/batch":
+            if self.path in ("/batch", "/batch-preview"):
                 self.batch_predict()
                 return
             if self.path == "/import-profile":
@@ -321,7 +345,10 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
             except OSError:
                 self.respond(503, render_page(error="The model could not be loaded. Check the server's model path."))
                 return
-            self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8", filename="sleep-predictions.csv")
+            if self.path == "/batch-preview":
+                self.respond(200, render_batch_results(columns, rows, predictions, output.getvalue()))
+            else:
+                self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8", filename="sleep-predictions.csv")
 
         def import_profile(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":
