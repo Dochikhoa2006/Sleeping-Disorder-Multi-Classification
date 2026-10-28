@@ -284,6 +284,11 @@ rows in input order. Download the complete CSV from that page, including rows
 beyond the preview. **Download CSV directly** skips the preview. Results stay
 in the browser response; the server does not keep a batch history.
 
+Search across patient columns or filter by predicted class from the preview.
+Filters cover the whole batch, including rows beyond the first 100, and do
+not rerun predictions. Download matching rows separately or clear the filters
+to return to the original results. The top download always keeps the full batch.
+
 ### Command-line prediction
 
 Try the included synthetic patient examples with the saved model:

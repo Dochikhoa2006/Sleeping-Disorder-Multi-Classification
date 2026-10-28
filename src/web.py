@@ -203,9 +203,12 @@ def uploaded_file(content_type: str, body: bytes, field_name: str) -> bytes:
     return payload
 
 
-def render_batch_results(columns: list[str], rows: list[dict], predictions: list[str], csv_content: str) -> str:
+def render_batch_results(columns: list[str], rows: list[dict], predictions: list[str], csv_content: str, *, query: str = "", selected_class: str = "") -> str:
     counts = Counter(predictions)
     labels = dict.fromkeys(["Healthy", "Insomnia", "Sleep Apnea", *predictions])
+    matches = [index for index, (row, prediction) in enumerate(zip(rows, predictions, strict=True))
+               if (not selected_class or prediction == selected_class)
+               and (not query or query.casefold() in " ".join([*(str(value) for value in row.values()), prediction]).casefold())]
     cards = "".join(
         f'<article><p>{escape(label)}</p><strong>{counts[label]}</strong></article>' for label in labels
     )
@@ -213,15 +216,54 @@ def render_batch_results(columns: list[str], rows: list[dict], predictions: list
         f'<th scope="col">{escape(column)}</th>' for column in [*columns, PREDICTION_COLUMN]
     )
     table_rows = []
-    for index, (row, prediction) in enumerate(zip(rows[:PREVIEW_ROWS], predictions[:PREVIEW_ROWS], strict=True), start=2):
+    for index in matches[:PREVIEW_ROWS]:
+        row, prediction = rows[index], predictions[index]
         cells = "".join(f'<td>{escape(str(row[column]))}</td>' for column in columns)
-        table_rows.append(f'<tr><th scope="row">{index}</th>{cells}<td>{escape(prediction)}</td></tr>')
+        table_rows.append(f'<tr><th scope="row">{index + 2}</th>{cells}<td>{escape(prediction)}</td></tr>')
+    if not matches:
+        table_rows.append(f'<tr><td colspan="{len(columns) + 2}">No records match these filters. Clear the filters to see the batch again.</td></tr>')
+    options = '<option value="">All classes</option>' + "".join(
+        f'<option value="{escape(label, quote=True)}"{" selected" if label == selected_class else ""}>{escape(label)}</option>'
+        for label in labels
+    )
+    filtered = ""
+    if query or selected_class:
+        output = StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=[*columns, PREDICTION_COLUMN])
+        writer.writeheader()
+        for index in matches:
+            writer.writerow({**rows[index], PREDICTION_COLUMN: predictions[index]})
+        encoded = base64.b64encode(output.getvalue().encode("utf-8")).decode("ascii")
+        filtered = f'<p><a href="data:text/csv;charset=utf-8;base64,{encoded}" download="filtered-predictions.csv">Download {len(matches)} matching predictions ↓</a></p>'
     workspace = Template(TEMPLATE_PATH.with_name("web_batch_results.html").read_text(encoding="utf-8")).substitute(
-        total=len(rows), shown=min(len(rows), PREVIEW_ROWS), cards=cards,
+        total=len(rows), matched=len(matches), shown=min(len(matches), PREVIEW_ROWS), cards=cards,
         headers=headers, rows="".join(table_rows),
         download=base64.b64encode(csv_content.encode("utf-8")).decode("ascii"),
+        query=escape(query, quote=True), options=options, filtered=filtered,
     )
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
+
+
+def read_preview_results(encoded: str) -> tuple[list[str], list[dict], list[str], str]:
+    content = base64.b64decode(encoded, validate=True).decode("utf-8")
+    reader = csv.reader(StringIO(content, newline=""), strict=True)
+    headers = next(reader, [])
+    if len(headers) != len(set(headers)) or PREDICTION_COLUMN not in headers:
+        raise ValueError("The results are malformed. Upload the original CSV again.")
+    prediction_index = headers.index(PREDICTION_COLUMN)
+    columns = [name for name in headers if name != PREDICTION_COLUMN]
+    source = StringIO(newline="")
+    writer = csv.writer(source)
+    writer.writerow(columns)
+    predictions = []
+    for values in reader:
+        if len(values) != len(headers) or not values[prediction_index]:
+            raise ValueError("The results contain an incomplete row.")
+        predictions.append(values[prediction_index])
+        writer.writerow(values[:prediction_index] + values[prediction_index + 1:])
+    source.seek(0)
+    columns, rows, _ = read_patient_csv(source)
+    return columns, rows, predictions, content
 
 
 def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> ThreadingHTTPServer:
@@ -276,6 +318,9 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
         def do_POST(self) -> None:
             if not self.local_request():
                 self.respond(403, "Local requests only.")
+                return
+            if self.path == "/batch-filter":
+                self.filter_batch()
                 return
             if self.path in ("/batch", "/batch-preview"):
                 self.batch_predict()
@@ -349,6 +394,30 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 self.respond(200, render_batch_results(columns, rows, predictions, output.getvalue()))
             else:
                 self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8", filename="sleep-predictions.csv")
+
+        def filter_batch(self) -> None:
+            if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+                self.respond(415, render_page(error="Use the filters on the batch preview page."))
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 16 * 1024 * 1024:
+                    self.respond(413, render_page(error="The results form is too large. Upload a smaller batch."))
+                    return
+                fields = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True, max_num_fields=4)
+                if any(len(items) != 1 for items in fields.values()):
+                    raise ValueError("Each filter field must be submitted exactly once.")
+                columns, rows, predictions, content = read_preview_results(fields.get("results", [""])[0])
+                query = fields.get("query", [""])[0].strip()
+                selected_class = fields.get("class", [""])[0]
+                if "reset" in fields:
+                    query = selected_class = ""
+                if len(query) > 256:
+                    raise ValueError("Search text must contain at most 256 characters.")
+            except (ValueError, TypeError, UnicodeError, csv.Error) as error:
+                self.respond(400, render_page(error=str(error)))
+                return
+            self.respond(200, render_batch_results(columns, rows, predictions, content, query=query, selected_class=selected_class))
 
         def import_profile(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":

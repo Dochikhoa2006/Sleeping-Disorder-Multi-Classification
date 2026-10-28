@@ -66,6 +66,11 @@
     .batch-preview table { margin-top: 0; min-width: 1200px; }
     .batch-preview td { white-space: pre-wrap; }
     .batch-preview thead th { position: sticky; top: 0; background: white; }
+    .batch-filters { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; padding: 18px; margin: 20px 0; }
+    .batch-filters > div { grid-column: 1 / -1; }
+    .batch-filters button { margin-top: 0; }
+    select { display: block; width: 100%; padding: 12px; margin-top: 7px; font: inherit; color: #18342f; background: #fafbf8; border: 1px solid #cdd7cf; border-radius: 8px; }
+    select:focus { outline: 3px solid #b8dfcf; outline-offset: 1px; }
     .batch input { font-size: 12px; }
     .profile-tools { background: white; border: 1px solid #dde2dc; border-radius: 14px; margin-top: 22px; }
     .profile-tools summary { cursor: pointer; font-weight: 650; padding: 18px 22px; }
@@ -75,7 +80,7 @@
     .privacy, .limits { padding: 8px 4px; font-size: 13px; color: #65756d; }
     footer { border-top: 1px solid #d5ddd6; margin-top: 34px; padding-top: 20px; color: #65756d; font-size: 12px; }
     @media (max-width: 760px) { main { padding: 28px 18px; } .layout, .profile-grid { grid-template-columns: 1fr; } form { padding: 22px; } fieldset + fieldset { border-top: 1px solid #d5ddd6; padding-top: 24px; } }
-    @media (max-width: 460px) { .fields { grid-template-columns: 1fr; } .secondary-button { margin-left: 0; } }
+    @media (max-width: 460px) { .fields, .batch-filters { grid-template-columns: 1fr; } .secondary-button { margin-left: 0; } }
     @media (max-width: 760px) { .model-heading { flex-direction: column; } .model-stats { grid-template-columns: 1fr; } .model-details { grid-template-columns: 1fr; gap: 5px; } .model-details dd { margin-bottom: 12px; } }
   </style>
 </head>

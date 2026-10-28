@@ -9,7 +9,16 @@
 <section class="model-stats" aria-label="Prediction counts by class">$cards</section>
 <section class="model-panel">
   <h2>Review the predictions</h2>
-  <p class="hint">Showing the first $shown of $total records in input order. The download contains every record and its original columns.</p>
+  <form class="batch-filters" action="/batch-filter" method="post">
+    <input type="hidden" name="results" value="$download">
+    <label for="batch-search">Search all patient columns
+      <input id="batch-search" type="search" name="query" value="$query" maxlength="256" placeholder="Record ID, occupation, notes…">
+    </label>
+    <label for="batch-class">Predicted class<select id="batch-class" name="class">$options</select></label>
+    <div><button type="submit">Apply filters</button><button class="secondary-button" name="reset" value="1" type="submit">Clear</button></div>
+  </form>
+  <p class="hint">Showing the first $shown of $matched records in input order. $matched of $total records match the filters. Class counts above cover the complete batch; the top download always contains every record.</p>
+  $filtered
   <div class="table-scroll batch-preview" tabindex="0" role="region" aria-label="Scrollable prediction results">
     <table><caption>Patient rows and predicted classes</caption><thead><tr>$headers</tr></thead><tbody>$rows</tbody></table>
   </div>

@@ -16,6 +16,69 @@ from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    def filter_preview(self, body, *, query="", selected_class="", reset=False):
+        encoded = re.search(r'name="results" value="([^"]+)"', body).group(1)
+        fields = {"results": encoded, "query": query, "class": selected_class}
+        if reset:
+            fields["reset"] = "1"
+        return self.request("POST", "/batch-filter", urlencode(fields), {
+            "Content-Type": "application/x-www-form-urlencoded",
+        })
+
+    def test_search_finds_rows_beyond_preview_limit_without_repredicting(self) -> None:
+        rows = [{**DEFAULT_PATIENT, "Record ID": f"record-{index}"} for index in range(101)]
+        _, _, initial = self.upload(self.csv_source(rows), path="/batch-preview")
+        with patch("src.predict.joblib.load") as load_model:
+            status, _, body = self.filter_preview(initial, query="record-100")
+        load_model.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertIn("Showing the first 1 of 1 records", body)
+        self.assertIn('<th scope="row">102</th>', body)
+        self.assertIn("<td>record-100</td>", body)
+        links = re.findall(r'href="data:text/csv;charset=utf-8;base64,([^"]+)"', body)
+        full = list(csv.DictReader(StringIO(base64.b64decode(links[0]).decode())))
+        matching = list(csv.DictReader(StringIO(base64.b64decode(links[1]).decode())))
+        self.assertEqual(len(full), 101)
+        self.assertEqual([row["Record ID"] for row in matching], ["record-100"])
+
+    def test_class_filter_combines_with_case_insensitive_search_and_can_be_cleared(self) -> None:
+        rows = [{**DEFAULT_PATIENT, "Record ID": str(index), "Notes": note}
+                for index, note in enumerate(("Night nurse", "Night teacher", "Day teacher"))]
+        with patch("src.web.predict_many", return_value=["Healthy", "Insomnia", "Insomnia"]):
+            _, _, initial = self.upload(self.csv_source(rows), path="/batch-preview")
+        with patch("src.predict.joblib.load") as load_model:
+            status, _, body = self.filter_preview(initial, query="NIGHT", selected_class="Insomnia")
+        load_model.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertIn("1 of 3 records match", body)
+        self.assertIn('<option value="Insomnia" selected>', body)
+        self.assertIn('<p>Insomnia</p><strong>2</strong>', body)  # Overall batch counts.
+        self.assertIn("<td>Night teacher</td>", body)
+        self.assertNotIn("<td>Night nurse</td>", body)
+        status, _, cleared = self.filter_preview(body, query="NIGHT", selected_class="Insomnia", reset=True)
+        self.assertEqual(status, 200)
+        self.assertIn("3 of 3 records match", cleared)
+        self.assertIn('name="query" value=""', cleared)
+
+    def test_empty_filter_results_and_search_text_are_handled_safely(self) -> None:
+        _, _, initial = self.upload(self.csv_source([DEFAULT_PATIENT]), path="/batch-preview")
+        status, _, body = self.filter_preview(initial, query='<script>missing</script>')
+        self.assertEqual(status, 200)
+        self.assertIn("No records match these filters", body)
+        self.assertIn("&lt;script&gt;missing&lt;/script&gt;", body)
+        self.assertNotIn("<script>", body)
+        self.assertIn("Download 0 matching predictions", body)
+        self.assertEqual(self.filter_preview(initial, query="x" * 257)[0], 400)
+
+    def test_filter_rejects_malformed_results_and_foreign_requests(self) -> None:
+        self.assertEqual(self.request("POST", "/batch-filter", "results=invalid", {
+            "Content-Type": "application/x-www-form-urlencoded",
+        })[0], 400)
+        self.assertEqual(self.request("POST", "/batch-filter", "", {
+            "Content-Type": "application/x-www-form-urlencoded", "Content-Length": str(16 * 1024 * 1024 + 1),
+        })[0], 413)
+        self.assertEqual(self.request("POST", "/batch-filter", "", {"Origin": "https://example.com"})[0], 403)
+
     @staticmethod
     def csv_source(rows):
         source = StringIO(newline="")
