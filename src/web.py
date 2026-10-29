@@ -203,12 +203,17 @@ def uploaded_file(content_type: str, body: bytes, field_name: str) -> bytes:
     return payload
 
 
-def render_batch_results(columns: list[str], rows: list[dict], predictions: list[str], csv_content: str, *, query: str = "", selected_class: str = "") -> str:
+def render_batch_results(columns: list[str], rows: list[dict], predictions: list[str], csv_content: str, *, query: str = "", selected_class: str = "", sort_by: str = "", direction: str = "asc") -> str:
     counts = Counter(predictions)
     labels = dict.fromkeys(["Healthy", "Insomnia", "Sleep Apnea", *predictions])
     matches = [index for index, (row, prediction) in enumerate(zip(rows, predictions, strict=True))
                if (not selected_class or prediction == selected_class)
                and (not query or query.casefold() in " ".join([*(str(value) for value in row.values()), prediction]).casefold())]
+    if sort_by:
+        def sort_key(index):
+            value = predictions[index] if sort_by == PREDICTION_COLUMN else rows[index][sort_by]
+            return float(value) if sort_by in CSV_NUMERIC_FEATURES else str(value).casefold()
+        matches.sort(key=sort_key, reverse=direction == "desc")
     cards = "".join(
         f'<article><p>{escape(label)}</p><strong>{counts[label]}</strong></article>' for label in labels
     )
@@ -227,7 +232,7 @@ def render_batch_results(columns: list[str], rows: list[dict], predictions: list
         for label in labels
     )
     filtered = ""
-    if query or selected_class:
+    if query or selected_class or sort_by:
         output = StringIO(newline="")
         writer = csv.DictWriter(output, fieldnames=[*columns, PREDICTION_COLUMN])
         writer.writeheader()
@@ -240,6 +245,13 @@ def render_batch_results(columns: list[str], rows: list[dict], predictions: list
         headers=headers, rows="".join(table_rows),
         download=base64.b64encode(csv_content.encode("utf-8")).decode("ascii"),
         query=escape(query, quote=True), options=options, filtered=filtered,
+        sorting='<option value="">Input order</option>' + "".join(
+            f'<option value="{escape(column, quote=True)}"{" selected" if column == sort_by else ""}>{escape(column)}</option>'
+            for column in [*columns, PREDICTION_COLUMN]
+        ),
+        ascending=" selected" if direction == "asc" else "",
+        descending=" selected" if direction == "desc" else "",
+        ordering=escape(f"{sort_by} ({'descending' if direction == 'desc' else 'ascending'})") if sort_by else "input order",
     )
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
@@ -404,20 +416,25 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 if not 0 < length <= 16 * 1024 * 1024:
                     self.respond(413, render_page(error="The results form is too large. Upload a smaller batch."))
                     return
-                fields = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True, max_num_fields=4)
+                fields = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True, max_num_fields=6)
                 if any(len(items) != 1 for items in fields.values()):
                     raise ValueError("Each filter field must be submitted exactly once.")
                 columns, rows, predictions, content = read_preview_results(fields.get("results", [""])[0])
                 query = fields.get("query", [""])[0].strip()
                 selected_class = fields.get("class", [""])[0]
+                sort_by = fields.get("sort", [""])[0]
+                direction = fields.get("direction", ["asc"])[0]
                 if "reset" in fields:
-                    query = selected_class = ""
+                    query = selected_class = sort_by = ""
+                    direction = "asc"
                 if len(query) > 256:
                     raise ValueError("Search text must contain at most 256 characters.")
+                if sort_by not in ["", *columns, PREDICTION_COLUMN] or direction not in ("asc", "desc"):
+                    raise ValueError("Choose a listed sort column and ascending or descending order.")
             except (ValueError, TypeError, UnicodeError, csv.Error) as error:
                 self.respond(400, render_page(error=str(error)))
                 return
-            self.respond(200, render_batch_results(columns, rows, predictions, content, query=query, selected_class=selected_class))
+            self.respond(200, render_batch_results(columns, rows, predictions, content, query=query, selected_class=selected_class, sort_by=sort_by, direction=direction))
 
         def import_profile(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":

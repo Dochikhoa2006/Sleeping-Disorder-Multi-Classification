@@ -16,14 +16,42 @@ from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
-    def filter_preview(self, body, *, query="", selected_class="", reset=False):
+    def filter_preview(self, body, *, query="", selected_class="", reset=False, sort_by="", direction="asc"):
         encoded = re.search(r'name="results" value="([^"]+)"', body).group(1)
-        fields = {"results": encoded, "query": query, "class": selected_class}
+        fields = {"results": encoded, "query": query, "class": selected_class, "sort": sort_by, "direction": direction}
         if reset:
             fields["reset"] = "1"
         return self.request("POST", "/batch-filter", urlencode(fields), {
             "Content-Type": "application/x-www-form-urlencoded",
         })
+
+    def test_batch_sorting_is_numeric_stable_and_preserves_original_download(self) -> None:
+        rows = [{**DEFAULT_PATIENT, "Age": age, "Record ID": str(index)} for index, age in enumerate((9, 100, 20, 20))]
+        _, _, initial = self.upload(self.csv_source(rows), path="/batch-preview")
+        for direction, expected in (("asc", ["0", "2", "3", "1"]), ("desc", ["1", "2", "3", "0"])):
+            with self.subTest(direction=direction), patch("src.predict.joblib.load") as load_model:
+                status, _, body = self.filter_preview(initial, sort_by="Age", direction=direction)
+            load_model.assert_not_called()
+            self.assertEqual(status, 200)
+            links = re.findall(r'href="data:text/csv;charset=utf-8;base64,([^"]+)"', body)
+            full, sorted_rows = [list(csv.DictReader(StringIO(base64.b64decode(link).decode()))) for link in links]
+            self.assertEqual([row["Record ID"] for row in full], ["0", "1", "2", "3"])
+            self.assertEqual([row["Record ID"] for row in sorted_rows], expected)
+            self.assertIn('<option value="Age" selected>', body)
+        _, _, cleared = self.filter_preview(body, sort_by="Age", direction="desc", reset=True)
+        self.assertIn("records in input order", cleared)
+        self.assertNotIn('<option value="Age" selected>', cleared)
+
+    def test_sorting_combines_with_filters_and_rejects_unknown_columns(self) -> None:
+        rows = [{**DEFAULT_PATIENT, "Record ID": record, "Notes": note} for record, note in
+                (("beta", "night"), ("Alpha", "night"), ("gamma", "day"))]
+        _, _, initial = self.upload(self.csv_source(rows), path="/batch-preview")
+        status, _, body = self.filter_preview(initial, query="night", sort_by="Record ID")
+        self.assertEqual(status, 200)
+        self.assertLess(body.index("<td>Alpha</td>"), body.index("<td>beta</td>"))
+        self.assertNotIn("<td>gamma</td>", body)
+        self.assertEqual(self.filter_preview(initial, sort_by="missing")[0], 400)
+        self.assertEqual(self.filter_preview(initial, direction="invalid")[0], 400)
 
     def test_search_finds_rows_beyond_preview_limit_without_repredicting(self) -> None:
         rows = [{**DEFAULT_PATIENT, "Record ID": f"record-{index}"} for index in range(101)]

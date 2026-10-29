@@ -288,6 +288,10 @@ Search across patient columns or filter by predicted class from the preview.
 Filters cover the whole batch, including rows beyond the first 100, and do
 not rerun predictions. Download matching rows separately or clear the filters
 to return to the original results. The top download always keeps the full batch.
+Sort the current results by any column in ascending or descending order.
+Numeric patient fields sort numerically, and the matching-row download uses
+the same order as the preview. Original CSV row numbers remain visible;
+**Clear** restores input order. The top full-batch download is unchanged.
 
 ### Command-line prediction
 

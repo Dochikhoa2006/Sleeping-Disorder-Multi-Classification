@@ -15,9 +15,11 @@
       <input id="batch-search" type="search" name="query" value="$query" maxlength="256" placeholder="Record ID, occupation, notes…">
     </label>
     <label for="batch-class">Predicted class<select id="batch-class" name="class">$options</select></label>
+    <label for="batch-sort">Sort by<select id="batch-sort" name="sort">$sorting</select></label>
+    <label for="batch-direction">Order<select id="batch-direction" name="direction"><option value="asc"$ascending>Ascending</option><option value="desc"$descending>Descending</option></select></label>
     <div><button type="submit">Apply filters</button><button class="secondary-button" name="reset" value="1" type="submit">Clear</button></div>
   </form>
-  <p class="hint">Showing the first $shown of $matched records in input order. $matched of $total records match the filters. Class counts above cover the complete batch; the top download always contains every record.</p>
+  <p class="hint">Showing the first $shown of $matched records in $ordering. $matched of $total records match the filters. Class counts above cover the complete batch; the top download always contains every record in original input order.</p>
   $filtered
   <div class="table-scroll batch-preview" tabindex="0" role="region" aria-label="Scrollable prediction results">
     <table><caption>Patient rows and predicted classes</caption><thead><tr>$headers</tr></thead><tbody>$rows</tbody></table>
