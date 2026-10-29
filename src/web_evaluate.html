@@ -1,0 +1,16 @@
+<section class="comparison-intro">
+  <h2>Evaluate labeled data</h2>
+  <p>Compare the saved model's predictions with known labels in a separate dataset. Profiles used to fit the model are excluded from the scores.</p>
+</section>
+$feedback
+$results
+<form class="evaluation-upload" action="/evaluate" method="post" enctype="multipart/form-data">
+  <h2>Choose your test dataset</h2>
+  <p class="hint">Include the patient feature columns and a <strong>Sleep Disorder</strong> column with explicit Healthy, Insomnia, or Sleep Apnea labels. Blank labels are not accepted.</p>
+  <label for="evaluation-file">Labeled UTF-8 CSV · up to 2 MiB including upload overhead
+    <input id="evaluation-file" type="file" name="evaluation" accept=".csv,text/csv" required>
+  </label>
+  <button type="submit">Evaluate model →</button>
+</form>
+<p class="privacy">Uploads are processed in memory. The server does not store the dataset or report.</p>
+<p class="limits">Evaluation scores describe only the supplied data. They do not establish clinical validity or guarantee performance on other populations.</p>

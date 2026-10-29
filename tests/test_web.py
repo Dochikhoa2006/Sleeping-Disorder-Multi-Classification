@@ -10,12 +10,72 @@ import unittest
 from urllib.parse import urlencode
 from unittest.mock import patch
 
+import joblib
+import pandas as pd
+
 from src.predict import PREDICTION_COLUMN, predict, predict_many, read_patient_json
+from src.predict import DEFAULT_MODEL_PATH
+from src.evaluation import evaluate_bytes, feature_fingerprints
 from src.web import DEFAULT_PATIENT, MAX_UPLOAD_BYTES, make_server
 from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    def test_evaluation_upload_page_explains_the_required_labels(self) -> None:
+        status, _, body = self.request("GET", "/evaluate")
+        self.assertEqual(status, 200)
+        self.assertIn('action="/evaluate"', body)
+        self.assertIn('name="evaluation"', body)
+        self.assertIn("Sleep Disorder", body)
+        self.assertIn("Blank labels are not accepted", body)
+        self.assertNotIn('download="evaluation.json"', body)
+
+    def test_browser_evaluation_matches_cli_metrics_and_download(self) -> None:
+        rows = [{**DEFAULT_PATIENT, "Age": 97, "Sleep Disorder": "Healthy"},
+                {**DEFAULT_PATIENT, "Age": 98, "Sleep Disorder": "Insomnia"}]
+        payload = self.csv_source(rows)
+        expected = evaluate_bytes(payload, DEFAULT_MODEL_PATH)
+        status, _, body = self.upload(payload, field="evaluation", path="/evaluate")
+        self.assertEqual(status, 200)
+        self.assertIn("Confusion matrix", body)
+        self.assertIn("Actual ↓ / Predicted →", body)
+        self.assertIn(f'{expected["accuracy"]:.1%}', body)
+        self.assertIn("Per-class scores and coverage", body)
+        encoded = re.search(r'href="data:application/json;charset=utf-8;base64,([^"]+)"', body).group(1)
+        self.assertEqual(json.loads(base64.b64decode(encoded)), expected)
+        self.assertNotIn("EVALUATION RESULTS", self.request("GET", "/evaluate")[2])
+
+    def test_browser_evaluation_excludes_training_profiles_and_rejects_only_overlaps(self) -> None:
+        first = {**DEFAULT_PATIENT, "Age": 97, "Sleep Disorder": "Healthy"}
+        second = {**DEFAULT_PATIENT, "Age": 98, "Sleep Disorder": "Healthy"}
+        pipeline = joblib.load(DEFAULT_MODEL_PATH)
+        pipeline.training_feature_hashes_ = set(feature_fingerprints(pd.DataFrame([first])))
+        with patch("src.evaluation.joblib.load", return_value=pipeline):
+            status, _, body = self.upload(self.csv_source([first, second]), field="evaluation", path="/evaluate")
+            self.assertEqual(status, 200)
+            self.assertIn("Evaluated 1 of 2 rows", body)
+            self.assertIn("Excluded 1 training-profile matches", body)
+            status, _, body = self.upload(self.csv_source([first]), field="evaluation", path="/evaluate")
+        self.assertEqual(status, 400)
+        self.assertIn("All evaluation rows match training profiles", body)
+        self.assertNotIn('download="evaluation.json"', body)
+
+    def test_browser_evaluation_rejects_unlabeled_and_invalid_data(self) -> None:
+        for rows in ([DEFAULT_PATIENT], [{**DEFAULT_PATIENT, "Sleep Disorder": ""}],
+                     [{**DEFAULT_PATIENT, "Sleep Disorder": "Insomina"}]):
+            with self.subTest(rows=rows):
+                status, _, body = self.upload(self.csv_source(rows), field="evaluation", path="/evaluate")
+                self.assertEqual(status, 400)
+                self.assertIn('role="alert"', body)
+                self.assertNotIn('download="evaluation.json"', body)
+
+    def test_browser_evaluation_enforces_upload_limits_and_local_origins(self) -> None:
+        self.assertEqual(self.request("POST", "/evaluate", "", {
+            "Content-Type": "multipart/form-data; boundary=test", "Content-Length": str(MAX_UPLOAD_BYTES + 1),
+        })[0], 413)
+        self.assertEqual(self.request("POST", "/evaluate", "{}", {"Content-Type": "application/json"})[0], 415)
+        self.assertEqual(self.request("POST", "/evaluate", "data", {"Origin": "https://example.com"})[0], 403)
+
     def filter_preview(self, body, *, query="", selected_class="", reset=False, sort_by="", direction="asc"):
         encoded = re.search(r'name="results" value="([^"]+)"', body).group(1)
         fields = {"results": encoded, "query": query, "class": selected_class, "sort": sort_by, "direction": direction}

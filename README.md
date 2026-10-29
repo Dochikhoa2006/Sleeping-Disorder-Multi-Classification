@@ -81,6 +81,8 @@ sleep-disorder-classification/
 │   ├── web_model.html
 │   ├── web_report.html
 │   ├── web_batch_results.html
+│   ├── web_evaluate.html
+│   ├── web_evaluation_results.html
 │   └── preprocessing.py
 ├── tests/
 │   ├── test_prediction.py
@@ -271,6 +273,14 @@ model's class labels, training and holdout row counts, stored cross-validation
 scores, dependency versions, and file fingerprint. The selected classifier is
 marked in the score table. Use **Download model details** to export the same
 information as JSON. Models without stored metadata show **Not recorded**.
+
+Use **Evaluate labeled data** at **http://127.0.0.1:8765/evaluate** to upload
+a UTF-8 CSV with patient features and explicit `Sleep Disorder` labels. The
+page shows accuracy, macro F1, per-class scores, excluded training overlaps,
+and a confusion matrix with actual labels on rows and predictions on columns.
+Download the complete JSON report, including dataset and model fingerprints.
+The upload is processed in memory using the same evaluation rules as the CLI;
+files containing only training profiles are rejected.
 
 For batch prediction, use **Predict a whole CSV** to choose a UTF-8 patient
 CSV and download `sleep-predictions.csv`. The output preserves input columns

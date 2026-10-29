@@ -1,0 +1,28 @@
+<section class="model-heading evaluation-results">
+  <div>
+    <p class="eyebrow">EVALUATION RESULTS</p>
+    <h2>Evaluated $evaluated of $total rows.</h2>
+    <p>Excluded $overlap training-profile matches. Scored $unique unique profiles; $duplicates repeated rows remain included.</p>
+  </div>
+  <a class="download-link" href="data:application/json;charset=utf-8;base64,$download" download="evaluation.json">Download evaluation JSON ↓</a>
+</section>
+<section class="model-stats" aria-label="Evaluation scores">
+  <article><p>Accuracy</p><strong>$accuracy</strong></article>
+  <article><p>Macro F1 · 0–1</p><strong>$f1</strong></article>
+  <article><p>Rows scored</p><strong>$evaluated</strong></article>
+</section>
+<section class="model-panel">
+  <div class="table-scroll"><table>
+    <caption>Confusion matrix</caption>
+    <thead><tr>$headers</tr></thead><tbody>$matrix</tbody>
+  </table></div>
+  <p class="hint">Rows show actual labels; columns show predicted labels. Diagonal cells are correct predictions. All cells show row counts.</p>
+</section>
+<section class="model-panel">
+  <div class="table-scroll"><table>
+    <caption>Per-class scores and coverage</caption>
+    <thead><tr><th scope="col">Class</th><th scope="col">Precision</th><th scope="col">Recall</th><th scope="col">F1</th><th scope="col">Rows scored</th><th scope="col">Training overlaps excluded</th></tr></thead>
+    <tbody>$scores</tbody>
+  </table></div>
+  <p class="hint">Precision, recall, and F1 range from 0 to 1. Classes with no scored rows still appear in the report.</p>
+</section>

@@ -24,6 +24,7 @@ from src.predict import (
 )
 from src.preprocessing import RAW_FEATURES
 from src.model_info import inspect_model
+from src.evaluation import evaluate_bytes
 
 TEMPLATE_PATH = Path(__file__).with_name("web_ui.html")
 EXAMPLE_CSV_PATH = Path(__file__).resolve().parents[1] / "examples" / "patients.csv"
@@ -278,6 +279,42 @@ def read_preview_results(encoded: str) -> tuple[list[str], list[dict], list[str]
     return columns, rows, predictions, content
 
 
+def render_evaluation(report: dict | None = None, *, error: str | None = None) -> str:
+    feedback = f'<section class="feedback error" role="alert"><h2>Check your evaluation file</h2><p>{escape(error)}</p></section>' if error else ""
+    results = ""
+    if report is not None:
+        labels = report["labels"]
+        headers = '<th scope="col">Actual ↓ / Predicted →</th>' + "".join(
+            f'<th scope="col">{escape(label)}</th>' for label in labels
+        )
+        matrix = []
+        scores = []
+        for index, label in enumerate(labels):
+            cells = []
+            for column, count in enumerate(report["confusion_matrix"][index]):
+                style = "matrix-hit" if index == column else "matrix-miss" if count else ""
+                cells.append(f'<td class="{style}">{count}</td>')
+            matrix.append(f'<tr><th scope="row">{escape(label)}</th>{"".join(cells)}</tr>')
+            metrics = report["per_class"][label]
+            scores.append(
+                f'<tr><th scope="row">{escape(label)}</th>'
+                f'<td>{metrics["precision"]:.3f}</td><td>{metrics["recall"]:.3f}</td>'
+                f'<td>{metrics["f1-score"]:.3f}</td><td>{int(metrics["support"])}</td>'
+                f'<td>{report["class_row_counts"][label]["training_overlap_rows"]}</td></tr>'
+            )
+        results = Template(TEMPLATE_PATH.with_name("web_evaluation_results.html").read_text(encoding="utf-8")).substitute(
+            accuracy=f'{report["accuracy"]:.1%}', f1=f'{report["macro_f1"]:.3f}',
+            evaluated=report["evaluated_rows"], total=report["total_rows"], overlap=report["training_overlap_rows"],
+            unique=report["unique_evaluated_profiles"], duplicates=report["duplicate_evaluated_rows"],
+            headers=headers, matrix="".join(matrix), scores="".join(scores),
+            download=base64.b64encode((json.dumps(report, indent=2, allow_nan=False) + "\n").encode("utf-8")).decode("ascii"),
+        )
+    workspace = Template(TEMPLATE_PATH.with_name("web_evaluate.html").read_text(encoding="utf-8")).substitute(
+        feedback=feedback, results=results,
+    )
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
+
+
 def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args) -> None:
@@ -311,6 +348,8 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 self.respond(200, render_page())
             elif self.path == "/compare":
                 self.respond(200, render_comparison())
+            elif self.path == "/evaluate":
+                self.respond(200, render_evaluation())
             elif self.path in ("/model", "/model.json"):
                 try:
                     report = inspect_model(model_path)
@@ -330,6 +369,9 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
         def do_POST(self) -> None:
             if not self.local_request():
                 self.respond(403, "Local requests only.")
+                return
+            if self.path == "/evaluate":
+                self.evaluate_upload()
                 return
             if self.path == "/batch-filter":
                 self.filter_batch()
@@ -406,6 +448,25 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 self.respond(200, render_batch_results(columns, rows, predictions, output.getvalue()))
             else:
                 self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8", filename="sleep-predictions.csv")
+
+        def evaluate_upload(self) -> None:
+            if self.headers.get_content_type() != "multipart/form-data":
+                self.respond(415, render_evaluation(error="Choose a labeled CSV using the evaluation form."))
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= MAX_UPLOAD_BYTES:
+                    self.respond(413, render_evaluation(error="Choose a CSV smaller than 2 MiB, including upload overhead."))
+                    return
+                payload = uploaded_file(self.headers.get("Content-Type", ""), self.rfile.read(length), "evaluation")
+                report = evaluate_bytes(payload, model_path)
+            except (ValueError, TypeError, UnicodeError, csv.Error) as error:
+                self.respond(400, render_evaluation(error=str(error)))
+                return
+            except OSError:
+                self.respond(503, render_evaluation(error="The model could not be loaded. Check the server's model path."))
+                return
+            self.respond(200, render_evaluation(report))
 
         def filter_batch(self) -> None:
             if self.headers.get_content_type() != "application/x-www-form-urlencoded":

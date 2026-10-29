@@ -40,12 +40,22 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path | Non
     """Score labeled, unseen rows and account for training-profile overlap."""
     if output_path is not None and output_path.resolve() in {data_path.resolve(), model_path.resolve()}:
         raise ValueError("Evaluation output path must differ from data and model paths.")
+    report = evaluate_bytes(data_path.read_bytes(), model_path, compressed=data_path.suffix.lower() == ".gz")
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with atomic_text_output(output_path) as output_file:
+            json.dump(report, output_file, indent=2, allow_nan=False)
+            output_file.write("\n")
+    return report
+
+
+def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool = False) -> dict:
+    """Evaluate CSV bytes in memory using the same rules as file evaluation."""
     model_bytes = model_path.read_bytes()
     pipeline = joblib.load(BytesIO(model_bytes))
     if not hasattr(pipeline, "training_feature_hashes_"):
         raise ValueError("Model lacks training fingerprints; retrain it before external evaluation.")
-    dataset_bytes = data_path.read_bytes()
-    if data_path.suffix.lower() == ".gz":
+    if compressed:
         try:
             csv_bytes = gzip.decompress(dataset_bytes)
         except (OSError, EOFError, zlib.error) as error:
@@ -90,9 +100,4 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path | Non
         "labels": labels,
         **classification_metrics(unseen_target, predictions, labels),
     }
-    if output_path is not None:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with atomic_text_output(output_path) as output_file:
-            json.dump(report, output_file, indent=2, allow_nan=False)
-            output_file.write("\n")
     return report

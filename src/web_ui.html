@@ -36,6 +36,9 @@
     .model-stats p { font-size: 13px; color: #53675e; margin: 0 0 10px; }
     .model-stats strong { font-size: 30px; }
     .model-panel { background: white; border: 1px solid #dde2dc; border-radius: 16px; padding: 24px; margin-top: 22px; }
+    .evaluation-upload { margin-top: 28px; }
+    .matrix-hit { background: #dcefe4; font-weight: 700; }
+    .matrix-miss { background: #fae8df; }
     meter { display: block; width: 100%; min-width: 85px; height: 14px; margin-top: 6px; }
     .model-details { display: grid; grid-template-columns: 180px 1fr; gap: 12px 20px; font-size: 14px; }
     .model-details dt { color: #65756d; }
@@ -91,7 +94,7 @@
       <h1>A closer look at<br>sleep &amp; lifestyle.</h1>
       <p>Explore how a trained model classifies sleep and lifestyle details as Healthy, Insomnia, or Sleep Apnea.</p>
     </header>
-    <nav aria-label="Prediction tools"><a href="/">Single patient &amp; CSV</a><a href="/compare">Compare profiles</a><a href="/model">Model dashboard</a></nav>
+    <nav aria-label="Prediction tools"><a href="/">Single patient &amp; CSV</a><a href="/compare">Compare profiles</a><a href="/model">Model dashboard</a><a href="/evaluate">Evaluate labeled data</a></nav>
     <div class="$layout_class">$workspace</div>
     <footer>Educational exploration only. Predictions are not medical advice or a diagnosis.</footer>
   </main>

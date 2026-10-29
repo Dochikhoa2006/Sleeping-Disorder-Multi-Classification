@@ -11,7 +11,7 @@ from unittest.mock import patch
 import joblib
 import pandas as pd
 
-from src.evaluation import evaluate_external, feature_fingerprints
+from src.evaluation import evaluate_bytes, evaluate_external, feature_fingerprints
 from src.evaluate import main
 from src.predict import predict
 from src.preprocessing import TARGET_COLUMN
@@ -19,6 +19,20 @@ from src.train import DEFAULT_MODEL_PATH
 
 
 class ExternalEvaluationTests(unittest.TestCase):
+    def test_in_memory_evaluation_matches_plain_and_gzip_file_reports(self) -> None:
+        rows = [{**self.new_patient(97), TARGET_COLUMN: "Healthy"},
+                {**self.new_patient(98), TARGET_COLUMN: "Insomnia"}]
+        with tempfile.TemporaryDirectory() as directory:
+            for compressed in (False, True):
+                with self.subTest(compressed=compressed):
+                    payload = pd.DataFrame(rows).to_csv(index=False).encode("utf-8")
+                    if compressed:
+                        payload = gzip.compress(payload)
+                    path = Path(directory) / ("patients.csv.gz" if compressed else "patients.csv")
+                    path.write_bytes(payload)
+                    self.assertEqual(evaluate_bytes(payload, DEFAULT_MODEL_PATH, compressed=compressed),
+                                     evaluate_external(path, DEFAULT_MODEL_PATH))
+
     def test_failed_report_write_preserves_existing_report_and_removes_temporary_file(self) -> None:
         def fail_during_write(report, output_file, **kwargs):
             output_file.write('{"partial":')
