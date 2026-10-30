@@ -404,6 +404,34 @@ cannot be combined with `--output-json` or `--output-csv`.
 Only load `.joblib` files from sources you trust. Joblib artifacts can execute
 code when loaded.
 
+### Local JSON API
+
+Start `python -m src.web`, then call the prediction API from another terminal:
+
+```bash
+curl http://127.0.0.1:8765/api/health
+curl -H "Content-Type: application/json" \
+  --data-binary @examples/patient.json \
+  http://127.0.0.1:8765/api/predict
+```
+
+`POST /api/predict` accepts one patient object or a non-empty JSON array, using
+the same fields and validation as the CLI. Successful responses always contain
+a prediction array in input order:
+
+```json
+{"predictions": ["Healthy"], "count": 1}
+```
+
+Requests are limited to 2 MiB. Invalid batches return `400` with an `error`
+message identifying the invalid patient; no partial predictions are returned.
+Unsupported content types return `415`, oversized requests `413`, and model
+file access failures `503`. Unknown API routes return `404` and incorrect
+GET/POST methods `405`. API errors use JSON. The API stays on localhost and
+does not store or log patient inputs. `GET /api/health` is a lightweight
+liveness check that does not load the model. Predictions remain educational
+model outputs, not diagnoses.
+
 ## Tests
 
 ```bash

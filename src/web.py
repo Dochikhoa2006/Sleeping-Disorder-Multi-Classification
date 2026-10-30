@@ -347,10 +347,12 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
             # Patient input is neither persisted nor written to access logs.
             pass
 
-        def respond(self, status: int, body: str, *, content_type: str = "text/html; charset=utf-8", filename: str | None = None) -> None:
+        def respond(self, status: int, body: str, *, content_type: str = "text/html; charset=utf-8", filename: str | None = None, allow: str | None = None) -> None:
             encoded = body.encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", content_type)
+            if allow:
+                self.send_header("Allow", allow)
             if filename:
                 self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
             self.send_header("X-Content-Type-Options", "nosniff")
@@ -367,9 +369,22 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 origin is None or origin in {f"http://{host}" for host in hosts}
             )
 
+        def respond_json(self, status: int, payload: dict, *, allow: str | None = None) -> None:
+            self.respond(status, json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
+                         content_type="application/json; charset=utf-8", allow=allow)
+
         def do_GET(self) -> None:
             if not self.local_request():
-                self.respond(403, "Local requests only.")
+                if self.path.startswith("/api/"):
+                    self.respond_json(403, {"error": "Local requests only."})
+                else:
+                    self.respond(403, "Local requests only.")
+            elif self.path == "/api/health":
+                self.respond_json(200, {"status": "ok"})
+            elif self.path.startswith("/api/"):
+                self.respond_json(405 if self.path == "/api/predict" else 404,
+                                  {"error": "Use POST for predictions." if self.path == "/api/predict" else "API route not found."},
+                                  allow="POST" if self.path == "/api/predict" else None)
             elif self.path == "/":
                 self.respond(200, render_page())
             elif self.path == "/compare":
@@ -394,7 +409,18 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
 
         def do_POST(self) -> None:
             if not self.local_request():
-                self.respond(403, "Local requests only.")
+                if self.path.startswith("/api/"):
+                    self.respond_json(403, {"error": "Local requests only."})
+                else:
+                    self.respond(403, "Local requests only.")
+                return
+            if self.path.startswith("/api/"):
+                if self.path == "/api/predict":
+                    self.api_predict()
+                else:
+                    self.respond_json(405 if self.path == "/api/health" else 404,
+                                      {"error": "Use GET for the health check." if self.path == "/api/health" else "API route not found."},
+                                      allow="GET" if self.path == "/api/health" else None)
                 return
             if self.path == "/evaluate":
                 self.evaluate_upload()
@@ -474,6 +500,26 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 self.respond(200, render_batch_results(columns, rows, predictions, output.getvalue()))
             else:
                 self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8", filename="sleep-predictions.csv")
+
+        def api_predict(self) -> None:
+            if self.headers.get_content_type() != "application/json":
+                self.respond_json(415, {"error": "Content-Type must be application/json."})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= MAX_UPLOAD_BYTES:
+                    self.respond_json(413, {"error": "JSON input must contain between 1 byte and 2 MiB."})
+                    return
+                records = read_patient_json(StringIO(self.rfile.read(length).decode("utf-8-sig")))
+                patients = records if isinstance(records, list) else [records]
+                predictions = predict_many(patients, model_path)
+            except (ValueError, TypeError, UnicodeError) as error:
+                self.respond_json(400, {"error": str(error)})
+                return
+            except OSError:
+                self.respond_json(503, {"error": "The model could not be loaded. Check the server's model path."})
+                return
+            self.respond_json(200, {"predictions": predictions, "count": len(predictions)})
 
         def evaluate_upload(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":

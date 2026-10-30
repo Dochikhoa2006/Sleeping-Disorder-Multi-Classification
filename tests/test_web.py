@@ -21,6 +21,69 @@ from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    def test_json_api_single_and_batch_predictions_match_cli_in_input_order(self) -> None:
+        for records in (DEFAULT_PATIENT, [DEFAULT_PATIENT, {**DEFAULT_PATIENT, "Age": 55, "Occupation": "Ingénieur"}]):
+            with self.subTest(batch=isinstance(records, list)):
+                status, headers, body = self.request("POST", "/api/predict", json.dumps(records, ensure_ascii=False).encode("utf-8-sig"), {
+                    "Content-Type": "application/json; charset=utf-8",
+                })
+                patients = records if isinstance(records, list) else [records]
+                self.assertEqual(status, 200)
+                self.assertEqual(headers["Content-Type"], "application/json; charset=utf-8")
+                self.assertEqual(headers["Cache-Control"], "no-store")
+                self.assertEqual(json.loads(body), {"predictions": predict_many(patients), "count": len(patients)})
+
+    def test_json_api_health_check_does_not_load_the_model(self) -> None:
+        with patch("src.predict.joblib.load") as load_model:
+            status, _, body = self.request("GET", "/api/health")
+        load_model.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"status": "ok"})
+
+    def test_json_api_invalid_records_never_load_the_model_or_return_partial_results(self) -> None:
+        invalid_batch = json.dumps([DEFAULT_PATIENT, {**DEFAULT_PATIENT, "Age": 0}])
+        for payload in ("[]", "null", '{"Age": 31, "Age": 55}', "not-json", b"\xff", invalid_batch):
+            with self.subTest(payload=payload), patch("src.predict.joblib.load") as load_model:
+                status, _, body = self.request("POST", "/api/predict", payload.encode() if isinstance(payload, str) else payload, {
+                    "Content-Type": "application/json",
+                })
+            load_model.assert_not_called()
+            self.assertEqual(status, 400)
+            response = json.loads(body)
+            self.assertIn("error", response)
+            self.assertNotIn("predictions", response)
+            if payload == invalid_batch:
+                self.assertIn("Patient 2", response["error"])
+
+    def test_json_api_limits_types_routes_and_local_access_return_json_errors(self) -> None:
+        requests = [
+            ("POST", "/api/predict", "{}", {"Content-Type": "text/plain"}, 415),
+            ("POST", "/api/predict", "", {"Content-Type": "application/json", "Content-Length": str(MAX_UPLOAD_BYTES + 1)}, 413),
+            ("POST", "/api/predict", "{}", {"Content-Type": "application/json", "Origin": "https://example.com"}, 403),
+            ("GET", "/api/health", None, {"Host": "example.com"}, 403),
+            ("GET", "/api/missing", None, {}, 404),
+            ("GET", "/api/predict", None, {}, 405),
+            ("POST", "/api/health", "{}", {"Content-Type": "application/json"}, 405),
+        ]
+        for method, path, payload, headers, expected in requests:
+            with self.subTest(method=method, path=path, expected=expected):
+                status, response_headers, body = self.request(method, path, payload, headers)
+                self.assertEqual(status, expected)
+                self.assertIn("application/json", response_headers["Content-Type"])
+                self.assertIn("error", json.loads(body))
+                self.assertNotIn("Access-Control-Allow-Origin", response_headers)
+                if expected == 405:
+                    self.assertEqual(response_headers["Allow"], "POST" if method == "GET" else "GET")
+
+    def test_json_api_model_access_failure_returns_a_service_error(self) -> None:
+        with patch("src.web.predict_many", side_effect=OSError("private model path")):
+            status, _, body = self.request("POST", "/api/predict", json.dumps(DEFAULT_PATIENT), {
+                "Content-Type": "application/json",
+            })
+        self.assertEqual(status, 503)
+        self.assertIn("error", json.loads(body))
+        self.assertNotIn("private model path", body)
+
     @staticmethod
     def evaluation_csv_download(body, filename):
         encoded = re.search(r'href="data:text/csv;charset=utf-8;base64,([^"]+)" download="' + re.escape(filename) + '"', body).group(1)
