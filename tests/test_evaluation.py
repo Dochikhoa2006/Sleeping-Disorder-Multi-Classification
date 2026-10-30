@@ -19,6 +19,28 @@ from src.train import DEFAULT_MODEL_PATH
 
 
 class ExternalEvaluationTests(unittest.TestCase):
+    def test_optional_row_diagnostics_align_predictions_and_excluded_records(self) -> None:
+        rows = [{**self.new_patient(96), TARGET_COLUMN: "Insomnia"},
+                {**self.new_patient(97), TARGET_COLUMN: "Healthy"},
+                {**self.new_patient(98), TARGET_COLUMN: "Sleep Apnea"}]
+        pipeline = joblib.load(DEFAULT_MODEL_PATH)
+        pipeline.training_feature_hashes_ = set(feature_fingerprints(pd.DataFrame(rows[:1])))
+        payload = pd.DataFrame(rows).to_csv(index=False).encode()
+        with patch("src.evaluation.joblib.load", return_value=pipeline), \
+                patch.object(pipeline, "predict", return_value=["Healthy", "Healthy"]) as predictor:
+            report = evaluate_bytes(payload, DEFAULT_MODEL_PATH, include_rows=True)
+            predictor.assert_called_once()
+            self.assertEqual(predictor.call_args.args[0]["Age"].tolist(), [97, 98])
+            diagnostics = report.pop("row_results")
+            self.assertEqual(report, evaluate_bytes(payload, DEFAULT_MODEL_PATH))
+        self.assertEqual(diagnostics, [
+            {"record_number": 1, "actual": "Insomnia", "predicted": None, "status": "training_overlap"},
+            {"record_number": 2, "actual": "Healthy", "predicted": "Healthy", "status": "correct"},
+            {"record_number": 3, "actual": "Sleep Apnea", "predicted": "Healthy", "status": "incorrect"},
+        ])
+        self.assertEqual(report["accuracy"], 0.5)
+        self.assertEqual(report["evaluated_rows"], 2)
+
     def test_in_memory_evaluation_matches_plain_and_gzip_file_reports(self) -> None:
         rows = [{**self.new_patient(97), TARGET_COLUMN: "Healthy"},
                 {**self.new_patient(98), TARGET_COLUMN: "Insomnia"}]

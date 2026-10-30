@@ -21,6 +21,45 @@ from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    @staticmethod
+    def evaluation_csv_download(body, filename):
+        encoded = re.search(r'href="data:text/csv;charset=utf-8;base64,([^"]+)" download="' + re.escape(filename) + '"', body).group(1)
+        return list(csv.DictReader(StringIO(base64.b64decode(encoded).decode("utf-8"), newline="")))
+
+    def test_evaluation_downloads_correct_incorrect_and_excluded_outcomes(self) -> None:
+        rows = [{**DEFAULT_PATIENT, "Age": 96, "Sleep Disorder": "Insomnia"},
+                {**DEFAULT_PATIENT, "Age": 97, "Sleep Disorder": "Healthy"},
+                {**DEFAULT_PATIENT, "Age": 98, "Sleep Disorder": "Sleep Apnea"}]
+        pipeline = joblib.load(DEFAULT_MODEL_PATH)
+        pipeline.training_feature_hashes_ = set(feature_fingerprints(pd.DataFrame(rows[:1])))
+        with patch("src.evaluation.joblib.load", return_value=pipeline), \
+                patch.object(pipeline, "predict", return_value=["Healthy", "Healthy"]):
+            status, _, body = self.upload(self.csv_source(rows), field="evaluation", path="/evaluate")
+        self.assertEqual(status, 200)
+        self.assertIn("Row-level evaluation diagnostics", body)
+        self.assertIn("Not predicted", body)
+        diagnostics = self.evaluation_csv_download(body, "evaluation-rows.csv")
+        self.assertEqual([row["Data record"] for row in diagnostics], ["1", "2", "3"])
+        self.assertEqual([row["Outcome"] for row in diagnostics], ["training_overlap", "correct", "incorrect"])
+        self.assertEqual(diagnostics[0][PREDICTION_COLUMN], "")
+        errors = self.evaluation_csv_download(body, "evaluation-errors.csv")
+        self.assertEqual([row["Data record"] for row in errors], ["3"])
+        self.assertEqual(errors[0]["Actual Sleep Disorder"], "Sleep Apnea")
+        self.assertEqual(errors[0][PREDICTION_COLUMN], "Healthy")
+
+    def test_evaluation_diagnostics_download_all_rows_and_allow_zero_errors(self) -> None:
+        patient = {**DEFAULT_PATIENT, "Age": 97}
+        label = predict(patient)
+        payload = self.csv_source([{**patient, "Sleep Disorder": label}] * 101)
+        status, _, body = self.upload(payload, field="evaluation", path="/evaluate")
+        self.assertEqual(status, 200)
+        self.assertIn("Showing the first 100 of 101 parsed data records", body)
+        self.assertNotIn('<th scope="row">101</th>', body)
+        diagnostics = self.evaluation_csv_download(body, "evaluation-rows.csv")
+        self.assertEqual(len(diagnostics), 101)
+        self.assertEqual(diagnostics[-1]["Data record"], "101")
+        self.assertEqual(self.evaluation_csv_download(body, "evaluation-errors.csv"), [])
+
     def test_evaluation_upload_page_explains_the_required_labels(self) -> None:
         status, _, body = self.request("GET", "/evaluate")
         self.assertEqual(status, 200)

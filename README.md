@@ -83,6 +83,7 @@ sleep-disorder-classification/
 │   ├── web_batch_results.html
 │   ├── web_evaluate.html
 │   ├── web_evaluation_results.html
+│   ├── web_evaluation_rows.html
 │   └── preprocessing.py
 ├── tests/
 │   ├── test_prediction.py
@@ -281,6 +282,12 @@ and a confusion matrix with actual labels on rows and predictions on columns.
 Download the complete JSON report, including dataset and model fingerprints.
 The upload is processed in memory using the same evaluation rules as the CLI;
 files containing only training profiles are rejected.
+
+The evaluation page also previews individual outcomes and downloads CSVs for
+all records or just misclassified records. Each row contains its parsed data
+record number, actual class, predicted class, and outcome. Training overlaps
+have no prediction and are marked excluded. Record numbers exclude the header
+and blank lines; the preview shows 100 records, while downloads include all.
 
 For batch prediction, use **Predict a whole CSV** to choose a UTF-8 patient
 CSV and download `sleep-predictions.csv`. The output preserves input columns

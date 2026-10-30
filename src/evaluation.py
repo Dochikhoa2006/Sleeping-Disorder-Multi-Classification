@@ -49,7 +49,7 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path | Non
     return report
 
 
-def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool = False) -> dict:
+def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool = False, include_rows: bool = False) -> dict:
     """Evaluate CSV bytes in memory using the same rules as file evaluation."""
     model_bytes = model_path.read_bytes()
     pipeline = joblib.load(BytesIO(model_bytes))
@@ -100,4 +100,14 @@ def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool =
         "labels": labels,
         **classification_metrics(unseen_target, predictions, labels),
     }
+    if include_rows:
+        remaining = iter(predictions)
+        diagnostics = []
+        for index, (actual, excluded) in enumerate(zip(target, overlap, strict=True), start=1):
+            predicted = None if excluded else next(remaining)
+            diagnostics.append({
+                "record_number": index, "actual": str(actual), "predicted": predicted,
+                "status": "training_overlap" if excluded else "correct" if predicted == actual else "incorrect",
+            })
+        report["row_results"] = diagnostics
     return report

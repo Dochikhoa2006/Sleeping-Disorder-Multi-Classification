@@ -1,0 +1,12 @@
+<section class="model-panel">
+  <h2>Review individual outcomes</h2>
+  <p><strong>$correct</strong> correct · <strong>$incorrect</strong> incorrect · <strong>$excluded</strong> excluded.</p>
+  <p class="hint">Showing the first $shown of $total parsed data records. Record numbers exclude the header and blank lines. Training-overlap records are not predicted and do not contribute to the scores.</p>
+  <div class="table-scroll"><table>
+    <caption>Row-level evaluation diagnostics</caption>
+    <thead><tr><th scope="col">Data record</th><th scope="col">Actual class</th><th scope="col">Predicted class</th><th scope="col">Outcome</th></tr></thead>
+    <tbody>$rows</tbody>
+  </table></div>
+  <p><a href="data:text/csv;charset=utf-8;base64,$all_download" download="evaluation-rows.csv">Download all $total row diagnostics ↓</a></p>
+  <p><a href="data:text/csv;charset=utf-8;base64,$errors_download" download="evaluation-errors.csv">Download $incorrect misclassified records ↓</a></p>
+</section>

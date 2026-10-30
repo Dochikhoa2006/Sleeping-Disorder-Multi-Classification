@@ -279,7 +279,7 @@ def read_preview_results(encoded: str) -> tuple[list[str], list[dict], list[str]
     return columns, rows, predictions, content
 
 
-def render_evaluation(report: dict | None = None, *, error: str | None = None) -> str:
+def render_evaluation(report: dict | None = None, *, error: str | None = None, diagnostics: list[dict] | None = None) -> str:
     feedback = f'<section class="feedback error" role="alert"><h2>Check your evaluation file</h2><p>{escape(error)}</p></section>' if error else ""
     results = ""
     if report is not None:
@@ -302,11 +302,37 @@ def render_evaluation(report: dict | None = None, *, error: str | None = None) -
                 f'<td>{metrics["f1-score"]:.3f}</td><td>{int(metrics["support"])}</td>'
                 f'<td>{report["class_row_counts"][label]["training_overlap_rows"]}</td></tr>'
             )
+        review = ""
+        if diagnostics is not None:
+            outcomes = {"correct": "Correct", "incorrect": "Incorrect", "training_overlap": "Excluded — training overlap"}
+            incorrect = [row for row in diagnostics if row["status"] == "incorrect"]
+
+            def diagnostics_download(records) -> str:
+                stream = StringIO(newline="")
+                writer = csv.writer(stream)
+                writer.writerow(["Data record", "Actual Sleep Disorder", PREDICTION_COLUMN, "Outcome"])
+                for row in records:
+                    writer.writerow([row["record_number"], row["actual"], row["predicted"], row["status"]])
+                return base64.b64encode(stream.getvalue().encode("utf-8")).decode("ascii")
+
+            review_rows = "".join(
+                f'<tr><th scope="row">{row["record_number"]}</th><td>{escape(row["actual"])}</td>'
+                f'<td>{escape(row["predicted"]) if row["predicted"] is not None else "Not predicted"}</td>'
+                f'<td>{outcomes[row["status"]]}</td></tr>'
+                for row in diagnostics[:PREVIEW_ROWS]
+            )
+            review = Template(TEMPLATE_PATH.with_name("web_evaluation_rows.html").read_text(encoding="utf-8")).substitute(
+                correct=sum(row["status"] == "correct" for row in diagnostics),
+                incorrect=len(incorrect), excluded=report["training_overlap_rows"],
+                shown=min(len(diagnostics), PREVIEW_ROWS), total=len(diagnostics), rows=review_rows,
+                all_download=diagnostics_download(diagnostics), errors_download=diagnostics_download(incorrect),
+            )
         results = Template(TEMPLATE_PATH.with_name("web_evaluation_results.html").read_text(encoding="utf-8")).substitute(
             accuracy=f'{report["accuracy"]:.1%}', f1=f'{report["macro_f1"]:.3f}',
             evaluated=report["evaluated_rows"], total=report["total_rows"], overlap=report["training_overlap_rows"],
             unique=report["unique_evaluated_profiles"], duplicates=report["duplicate_evaluated_rows"],
             headers=headers, matrix="".join(matrix), scores="".join(scores),
+            review=review,
             download=base64.b64encode((json.dumps(report, indent=2, allow_nan=False) + "\n").encode("utf-8")).decode("ascii"),
         )
     workspace = Template(TEMPLATE_PATH.with_name("web_evaluate.html").read_text(encoding="utf-8")).substitute(
@@ -459,14 +485,15 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                     self.respond(413, render_evaluation(error="Choose a CSV smaller than 2 MiB, including upload overhead."))
                     return
                 payload = uploaded_file(self.headers.get("Content-Type", ""), self.rfile.read(length), "evaluation")
-                report = evaluate_bytes(payload, model_path)
+                report = evaluate_bytes(payload, model_path, include_rows=True)
+                diagnostics = report.pop("row_results")
             except (ValueError, TypeError, UnicodeError, csv.Error) as error:
                 self.respond(400, render_evaluation(error=str(error)))
                 return
             except OSError:
                 self.respond(503, render_evaluation(error="The model could not be loaded. Check the server's model path."))
                 return
-            self.respond(200, render_evaluation(report))
+            self.respond(200, render_evaluation(report, diagnostics=diagnostics))
 
         def filter_batch(self) -> None:
             if self.headers.get_content_type() != "application/x-www-form-urlencoded":
