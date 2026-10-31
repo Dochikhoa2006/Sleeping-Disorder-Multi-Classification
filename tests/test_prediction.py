@@ -1,7 +1,7 @@
 import unittest
 import csv
 import json
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 from io import StringIO
 import tempfile
 from pathlib import Path
@@ -17,6 +17,44 @@ MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
 
 
 class PredictionTests(unittest.TestCase):
+    def test_json_pipeline_returns_only_json_and_keeps_streams_open(self) -> None:
+        source = StringIO("\ufeff" + json.dumps([self.sample_patient()] * 2))
+        output, errors = StringIO(), StringIO()
+        with patch("sys.argv", ["predict", "--input-json", "-", "--output-json", "-"]), \
+                patch("sys.stdin", source), redirect_stdout(output), redirect_stderr(errors):
+            main()
+        self.assertEqual(json.loads(output.getvalue()), predict_many([self.sample_patient()] * 2))
+        self.assertIn("not medical advice", errors.getvalue())
+        self.assertFalse(source.closed)
+        self.assertFalse(output.closed)
+
+    def test_csv_pipeline_preserves_extra_columns_and_quoted_values(self) -> None:
+        patient = {**self.sample_patient(), "Notes": "line one, quoted\nline two"}
+        source = StringIO()
+        writer = csv.DictWriter(source, fieldnames=list(patient))
+        writer.writeheader()
+        writer.writerow(patient)
+        source.seek(0)
+        output = StringIO()
+        with patch("sys.argv", ["predict", "--input-csv", "-", "--output-csv", "-"]), \
+                patch("sys.stdin", source), redirect_stdout(output), redirect_stderr(StringIO()):
+            main()
+        rows = list(csv.DictReader(StringIO(output.getvalue())))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["Notes"], patient["Notes"])
+        self.assertEqual(rows[0][PREDICTION_COLUMN], predict(self.sample_patient()))
+
+    def test_invalid_stdin_produces_no_prediction_output_or_model_load(self) -> None:
+        for contents in ('{"Age": 31}', '{broken'):
+            with self.subTest(contents=contents), \
+                    patch("sys.argv", ["predict", "--input-json", "-", "--output-json", "-"]), \
+                    patch("sys.stdin", StringIO(contents)), \
+                    patch("src.predict.joblib.load") as load_model, redirect_stdout(StringIO()) as output:
+                with self.assertRaisesRegex(SystemExit, "Error:"):
+                    main()
+                self.assertEqual(output.getvalue(), "")
+                load_model.assert_not_called()
+
     def test_malformed_csv_quoting_stops_before_model_loading_or_output(self) -> None:
         patient = self.sample_patient()
         header = ",".join(patient) + ",Notes\n"

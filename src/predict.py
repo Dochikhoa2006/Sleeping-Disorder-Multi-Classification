@@ -7,6 +7,9 @@ import csv
 import json
 import math
 import re
+import sys
+from contextlib import nullcontext
+from io import StringIO
 from pathlib import Path
 from numbers import Real
 from typing import Any, TextIO
@@ -100,7 +103,7 @@ def read_patient_csv(input_file: TextIO) -> tuple[list[str], list[dict[str, str]
 def write_prediction_csv(
     path: Path, columns: list[str], rows: list[dict[str, str]], predictions: list[str]
 ) -> None:
-    with atomic_text_output(path, newline="") as output_file:
+    with (nullcontext(sys.stdout) if path == Path("-") else atomic_text_output(path, newline="")) as output_file:
         writer = csv.DictWriter(output_file, fieldnames=[*columns, PREDICTION_COLUMN])
         writer.writeheader()
         for row, prediction in zip(rows, predictions, strict=True):
@@ -209,19 +212,19 @@ def parse_args() -> argparse.Namespace:
     input_group.add_argument(
         "--input-json",
         type=Path,
-        help="Path to a patient JSON object or an array of patient objects.",
+        help="Patient JSON object or array; use - to read standard input.",
     )
     input_group.add_argument(
-        "--input-csv", type=Path, help="Path to a CSV with one patient per row."
+        "--input-csv", type=Path, help="CSV with one patient per row; use - to read standard input."
     )
     parser.add_argument(
         "--output-json",
         type=Path,
-        help="Write predictions as a JSON array in input order.",
+        help="Write a JSON array in input order; use - for standard output.",
     )
     parser.add_argument(
         "--output-csv", type=Path,
-        help="Write input CSV rows with a predicted class column.",
+        help="Write CSV rows with predictions; use - for standard output.",
     )
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
     parser.add_argument(
@@ -241,16 +244,20 @@ def main() -> None:
         raise SystemExit("Error: --output-csv requires --input-csv.")
     output = arguments.output_json or arguments.output_csv
     source = arguments.input_json or arguments.input_csv
-    if output and source and output.resolve() == source.resolve():
+    if output and source and output != Path("-") and source != Path("-") and output.resolve() == source.resolve():
         raise SystemExit("Error: output path must differ from input path.")
-    if output and output.resolve() == arguments.model.resolve():
+    if output and output != Path("-") and output.resolve() == arguments.model.resolve():
         raise SystemExit("Error: output path must differ from model path.")
     try:
         if arguments.input_csv:
-            columns, original_rows, patients = load_patient_csv(arguments.input_csv)
+            columns, original_rows, patients = (
+                read_patient_csv(StringIO(sys.stdin.read().removeprefix("\ufeff")))
+                if arguments.input_csv == Path("-") else load_patient_csv(arguments.input_csv)
+            )
         else:
             patient_data = (
-                load_patient_json(arguments.input_json)
+                (read_patient_json(StringIO(sys.stdin.read().removeprefix("\ufeff")))
+                 if arguments.input_json == Path("-") else load_patient_json(arguments.input_json))
                 if arguments.input_json else prompt_for_patient()
             )
             patients = patient_data if isinstance(patient_data, list) else [patient_data]
@@ -260,13 +267,17 @@ def main() -> None:
             return
         predictions = predict_many(patients, arguments.model)
         if arguments.output_json:
-            with atomic_text_output(arguments.output_json) as output_file:
+            with (nullcontext(sys.stdout) if arguments.output_json == Path("-")
+                  else atomic_text_output(arguments.output_json)) as output_file:
                 output_file.write(json.dumps(predictions, indent=2) + "\n")
         if arguments.output_csv:
             write_prediction_csv(arguments.output_csv, columns, original_rows, predictions)
     except (OSError, ValueError, TypeError, json.JSONDecodeError, csv.Error) as error:
         raise SystemExit(f"Error: {error}") from error
 
+    if output == Path("-"):
+        print("This educational prediction is not medical advice.", file=sys.stderr)
+        return
     if arguments.output_json or arguments.output_csv:
         print(f"Saved {len(predictions)} prediction(s) to: {arguments.output_json or arguments.output_csv}")
     elif len(predictions) == 1:

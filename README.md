@@ -508,3 +508,18 @@ Prediction*.
 ## Contact
 
 Chi Khoa Do — dochikhoa2006@gmail.com
+
+### Shell pipelines without temporary files
+
+Use `-` as an input or output path to read standard input or write standard
+output. This works for a JSON patient object, a JSON batch, or a CSV batch:
+
+```bash
+cat examples/patient.json | python -m src.predict --input-json - --output-json -
+cat examples/patients.csv | python -m src.predict --input-csv - --output-csv - > predictions.csv
+```
+
+Standard output contains only the requested JSON array or CSV, so another program
+can parse it directly. The educational disclaimer goes to standard error in this
+mode. Input validation completes before prediction or output; CSV exports retain
+extra columns and quoted values. `--validate-only` also accepts standard input.
