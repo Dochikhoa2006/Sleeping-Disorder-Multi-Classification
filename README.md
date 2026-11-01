@@ -571,3 +571,11 @@ is available on every app page. Download `/template.csv` for a header-only CSV
 with the 11 required columns, fill in one or more patient rows, then upload it
 for batch prediction. The existing `/example.csv` still provides synthetic
 sample records. The guide and blank template work without loading a model.
+
+### Automatic dark theme
+
+The local browser app follows the operating system or browser color preference.
+Dark mode covers forms, dropdowns, result cards, tables, and evaluation matrices,
+with visible keyboard focus indicators. Change the system appearance to switch
+between light and dark; no account, saved preference, or JavaScript is required.
+Printable patient reports keep their paper-friendly appearance.
