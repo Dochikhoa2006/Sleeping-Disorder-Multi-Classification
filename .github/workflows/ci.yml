@@ -54,3 +54,39 @@ jobs:
         run: |
           python -m pip install --upgrade pip pip-audit
           python -m pip_audit -r requirements.txt
+
+  container:
+    name: Container smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Build runtime image
+        run: docker build -f Dockerfile.web -t sleep-web:test .
+
+      - name: Verify container health and prediction with a read-only filesystem
+        shell: bash
+        run: |
+          docker run --detach --name sleep-web-ci --read-only \
+            --tmpfs /tmp:size=64m,mode=1777 --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --publish 127.0.0.1:8765:8765 sleep-web:test
+          trap 'docker logs sleep-web-ci; docker rm --force sleep-web-ci' EXIT
+          ready=false
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8765/api/health; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+          test "$(docker exec sleep-web-ci id -u)" = 10001
+          curl --fail --silent --show-error http://127.0.0.1:8765/api/predict \
+            -H 'Content-Type: application/json' --data-binary @examples/patient.json \
+            > prediction.json
+          python -c 'import json; r=json.load(open("prediction.json")); assert r["count"] == 1; assert r["predictions"] == ["Healthy"]'

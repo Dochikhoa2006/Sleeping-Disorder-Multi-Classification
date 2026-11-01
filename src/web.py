@@ -419,7 +419,7 @@ def render_evaluation(report: dict | None = None, *, error: str | None = None, d
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
 
-def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> ThreadingHTTPServer:
+def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind: str = "127.0.0.1") -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args) -> None:
             # Patient input is neither persisted nor written to access logs.
@@ -680,12 +680,14 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                 return
             self.respond(200, render_page(patient, notice="Review the restored details, then predict or edit them. No prediction has run yet."))
 
-    return ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    return ThreadingHTTPServer((bind, port), Handler)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Open a local browser interface for sleep-disorder predictions.")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--bind", choices=("127.0.0.1", "0.0.0.0"), default="127.0.0.1",
+                        help="Listen address; use 0.0.0.0 inside a container with a loopback-only published port.")
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
     arguments = parser.parse_args()
     if not 1 <= arguments.port <= 65535:
@@ -693,7 +695,7 @@ def main() -> None:
     if not arguments.model.is_file():
         parser.error(f"Model file does not exist: {arguments.model}")
     try:
-        with make_server(arguments.model, arguments.port) as server:
+        with make_server(arguments.model, arguments.port, bind=arguments.bind) as server:
             print(f"Open http://127.0.0.1:{server.server_port} · Press Ctrl+C to stop.", flush=True)
             server.serve_forever()
     except KeyboardInterrupt:

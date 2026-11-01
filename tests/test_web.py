@@ -21,6 +21,13 @@ from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    def test_server_keeps_loopback_default_and_supports_container_binding(self):
+        for bind in ("127.0.0.1", "0.0.0.0"):
+            with self.subTest(bind=bind), make_server(port=0, bind=bind) as server:
+                self.assertEqual(server.server_address[0], bind)
+        with make_server(port=0) as server:
+            self.assertEqual(server.server_address[0], "127.0.0.1")
+
     def test_scenario_explorer_renders_and_predicts_one_batch(self):
         self.assertEqual(self.request("GET", "/explore")[0], 200)
         values = {**DEFAULT_PATIENT, "scenario_field": "Sleep Duration",

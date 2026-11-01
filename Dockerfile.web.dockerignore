@@ -1,0 +1,11 @@
+# Allow only runtime sources, pinned dependencies, the shipped model, and examples.
+**
+!requirements.txt
+!src/
+!src/**
+!models/
+!models/sleep_disorder_pipeline.joblib
+!examples/
+!examples/**
+**/__pycache__/
+**/*.pyc

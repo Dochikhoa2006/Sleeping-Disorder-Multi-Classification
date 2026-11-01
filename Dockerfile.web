@@ -1,0 +1,22 @@
+FROM python:3.11.15-slim-bookworm@sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MPLCONFIGDIR=/tmp/matplotlib \
+    HOME=/tmp
+
+WORKDIR /app
+COPY requirements.txt ./
+RUN python -m pip install --no-cache-dir -r requirements.txt \
+    && groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --no-create-home app
+
+COPY src/ ./src/
+COPY models/sleep_disorder_pipeline.joblib ./models/sleep_disorder_pipeline.joblib
+COPY examples/ ./examples/
+
+USER 10001:10001
+EXPOSE 8765
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8765/api/health', timeout=3).close()"
+CMD ["python", "-m", "src.web", "--bind", "0.0.0.0", "--port", "8765"]

@@ -590,3 +590,29 @@ CSV download includes all 11 input fields for every scenario plus its prediction
 Decimal scenario values are allowed. Ranges must stay within the input limits.
 This explores model behavior for hypothetical profiles; it does not establish
 causation, offer treatment advice, or predict the effect of changing a habit.
+
+### Run with Docker Compose
+
+With Docker Engine/Desktop and Compose running, build and start the local app:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+Open <http://127.0.0.1:8765>. Stop an existing Python preview on port 8765 first
+if it is already running. Stop the container with `docker compose down`; view
+startup errors with `docker compose logs web`.
+
+The dedicated `Dockerfile.web` image includes pinned Python dependencies, application templates, synthetic
+examples, and the shipped model. The build context excludes local datasets, Git
+history, and virtual environments. It runs as a non-root user; Compose uses a
+read-only filesystem with temporary space in `/tmp`, drops Linux capabilities,
+and publishes the app only on the host's loopback address. No volume is needed.
+The health check tests server liveness; prediction is checked separately in CI.
+
+The container uses `--bind 0.0.0.0` internally so Docker can forward requests.
+Normal `python -m src.web` use still binds only to `127.0.0.1`. Keep the Compose
+port mapping bound to `127.0.0.1`: the app has no authentication and is intended
+for local use. The container CI job builds the image and checks a prediction
+under the same read-only runtime settings.
