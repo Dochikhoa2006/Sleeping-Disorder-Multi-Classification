@@ -543,3 +543,22 @@ when all records are valid and 1 when any are invalid. Invalid records still
 produce a complete report. Malformed JSON, duplicate keys, empty batches, and
 non-object entries are file-level errors and do not replace an existing report.
 File reports are written atomically, and the input file cannot be overwritten.
+
+### Audit CSV batches
+
+Audit CSV files with the same column, numeric, and patient validation rules used
+by prediction, without loading the model:
+
+```bash
+python -m src.audit --input-csv examples/patients.csv --output audit.json
+cat examples/patients.csv | python -m src.audit --input-csv -
+```
+
+The command continues past invalid row widths and patient values, reporting each
+record's first error. CSV reports add `csv_row` to each record: the header is row
+1, and each parsed record counts as one row, including records with quoted
+multiline fields. Extra columns are allowed and their values are omitted from
+the report. UTF-8 files with a byte order mark are supported. Invalid headers,
+malformed quoting, and files without data rows are file-level errors that leave
+an existing report untouched. As with JSON audits, invalid records produce the
+complete report and exit status 1; fully valid batches exit with status 0.
