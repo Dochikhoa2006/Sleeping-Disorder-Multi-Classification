@@ -579,3 +579,14 @@ Dark mode covers forms, dropdowns, result cards, tables, and evaluation matrices
 with visible keyboard focus indicators. Change the system appearance to switch
 between light and dark; no account, saved preference, or JavaScript is required.
 Printable patient reports keep their paper-friendly appearance.
+
+### Explore a numeric input across a range
+
+Open `/explore` or choose **Scenario explorer** in the local app. Enter a valid
+base profile, choose a numeric input, and set an increasing range and 2–25 points.
+The app predicts evenly spaced scenarios including both endpoints, keeping every
+other input fixed. The results table shows each value and predicted class; the
+CSV download includes all 11 input fields for every scenario plus its prediction.
+Decimal scenario values are allowed. Ranges must stay within the input limits.
+This explores model behavior for hypothetical profiles; it does not establish
+causation, offer treatment advice, or predict the effect of changing a habit.

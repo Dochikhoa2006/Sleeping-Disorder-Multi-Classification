@@ -105,6 +105,63 @@ def render_page(values: dict | None = None, *, result: str | None = None, error:
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="layout")
 
 
+def scenario_patients(values: dict) -> tuple[str, list[dict]]:
+    """Build a bounded, evenly spaced sweep of one numeric input."""
+    feature = values.get("scenario_field", "Sleep Duration")
+    if feature not in LIMITS:
+        raise ValueError("Choose a numeric scenario field.")
+    try:
+        start = float(values.get("scenario_start", "5"))
+        stop = float(values.get("scenario_stop", "9"))
+        count = int(values.get("scenario_count", "9"))
+    except (ValueError, TypeError) as error:
+        raise ValueError("Enter numeric range endpoints and an integer point count.") from error
+    low, high = LIMITS[feature]
+    if not (math.isfinite(start) and math.isfinite(stop) and low <= start < stop <= high):
+        raise ValueError(f"Choose an increasing range for {feature} within {low}–{high}.")
+    if not 2 <= count <= 25:
+        raise ValueError("Choose between 2 and 25 scenario points.")
+    patient = parse_form_patient(values)
+    validate_patient(patient)
+    patients = [{**patient, feature: start + (stop - start) * index / (count - 1)}
+                for index in range(count)]
+    patients[-1][feature] = stop
+    return feature, patients
+
+
+def render_scenarios(values: dict | None = None, *, result=None, error: str | None = None) -> str:
+    values = {**DEFAULT_PATIENT, "scenario_field": "Sleep Duration", "scenario_start": "5",
+              "scenario_stop": "9", "scenario_count": "9"} if values is None else values
+    options = "".join(f'<option value="{escape(feature)}"'
+                      + (' selected' if values.get("scenario_field") == feature else '')
+                      + f'>{escape(LABELS.get(feature, feature))}</option>' for feature in LIMITS)
+    feedback = ""
+    if error:
+        feedback = f'<section class="feedback error" role="alert"><h2>Check your scenario</h2><p>{escape(error)}</p></section>'
+    elif result is not None:
+        feature, patients, predictions = result
+        rows = "".join(f'<tr><th scope="row">{escape(str(patient[feature]))}</th><td>{escape(prediction)}</td></tr>'
+                       for patient, prediction in zip(patients, predictions, strict=True))
+        output = StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=[*RAW_FEATURES, PREDICTION_COLUMN])
+        writer.writeheader()
+        for patient, prediction in zip(patients, predictions, strict=True):
+            writer.writerow({**patient, PREDICTION_COLUMN: prediction})
+        download = base64.b64encode(output.getvalue().encode("utf-8")).decode("ascii")
+        feedback = ('<section class="model-panel" role="status"><h2>Scenario results</h2>'
+                    f'<p>{len(patients)} profiles evaluated. Only {escape(feature)} varies.</p>'
+                    f'<a class="download-link" href="data:text/csv;charset=utf-8;base64,{download}" download="scenario-predictions.csv">Download all scenario profiles ↓</a>'
+                    '<div class="table-scroll"><table><caption>Predictions across the chosen range</caption>'
+                    f'<thead><tr><th scope="col">{escape(LABELS.get(feature, feature))}</th><th scope="col">Predicted class</th></tr></thead>'
+                    f'<tbody>{rows}</tbody></table></div></section>')
+    workspace = Template(TEMPLATE_PATH.with_name("web_scenarios.html").read_text(encoding="utf-8")).substitute(
+        fields=render_fields(values), options=options, feedback=feedback,
+        start=escape(str(values.get("scenario_start", "")), quote=True),
+        stop=escape(str(values.get("scenario_stop", "")), quote=True),
+        count=escape(str(values.get("scenario_count", "")), quote=True))
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
+
+
 def render_comparison(values: dict | None = None, *, result: list[str] | None = None, error: str | None = None) -> str:
     if values is None:
         values = {prefix + key: value for prefix in ("a.", "b.") for key, value in DEFAULT_PATIENT.items()}
@@ -408,6 +465,8 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                                   allow="POST" if self.path == "/api/predict" else None)
             elif self.path == "/":
                 self.respond(200, render_page())
+            elif self.path == "/explore":
+                self.respond(200, render_scenarios())
             elif self.path == "/guide":
                 self.respond(200, render_input_guide())
             elif self.path == "/template.csv":
@@ -462,14 +521,15 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
             if self.path == "/import-profile":
                 self.import_profile()
                 return
-            if self.path not in ("/predict", "/compare", "/report", "/profile.json"):
+            if self.path not in ("/predict", "/compare", "/report", "/profile.json", "/explore"):
                 self.respond(404, "Page not found.")
                 return
             if self.headers.get_content_type() != "application/x-www-form-urlencoded":
                 self.respond(415, "Submit the patient form as URL-encoded data.")
                 return
             values = {}
-            renderer = render_comparison if self.path == "/compare" else render_page
+            renderer = (render_scenarios if self.path == "/explore" else
+                        render_comparison if self.path == "/compare" else render_page)
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 16384:
@@ -485,7 +545,10 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                     self.respond(200, json.dumps(patient, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
                                  content_type="application/json; charset=utf-8", filename="patient-profile.json")
                     return
-                if self.path == "/compare":
+                if self.path == "/explore":
+                    feature, patients = scenario_patients(values)
+                    result = (feature, patients, predict_many(patients, model_path))
+                elif self.path == "/compare":
                     patients = [parse_form_patient(values, prefix) for prefix in ("a.", "b.")]
                     result = predict_many(patients, model_path)
                 else:

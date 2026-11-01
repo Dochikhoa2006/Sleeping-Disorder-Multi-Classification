@@ -21,6 +21,48 @@ from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    def test_scenario_explorer_renders_and_predicts_one_batch(self):
+        self.assertEqual(self.request("GET", "/explore")[0], 200)
+        values = {**DEFAULT_PATIENT, "scenario_field": "Sleep Duration",
+                  "scenario_start": "5", "scenario_stop": "9", "scenario_count": "3"}
+        with patch("src.web.predict_many", wraps=predict_many) as predict_batch:
+            status, _, body = self.request("POST", "/explore", urlencode(values),
+                                          {"Content-Type": "application/x-www-form-urlencoded"})
+        self.assertEqual(status, 200)
+        predict_batch.assert_called_once()
+        patients = predict_batch.call_args.args[0]
+        self.assertEqual([row["Sleep Duration"] for row in patients], [5, 7, 9])
+        self.assertTrue(all(row["Age"] == DEFAULT_PATIENT["Age"] for row in patients))
+        encoded = re.search(r'data:text/csv;charset=utf-8;base64,([^"\s]+)', body).group(1)
+        rows = list(csv.DictReader(StringIO(base64.b64decode(encoded).decode())))
+        self.assertEqual([row[PREDICTION_COLUMN] for row in rows], predict_many(patients))
+        self.assertEqual([float(row["Sleep Duration"]) for row in rows], [5, 7, 9])
+        self.assertIn("not what changing a habit would cause", body)
+
+    def test_invalid_scenario_ranges_never_predict_and_preserve_values(self):
+        values = {**DEFAULT_PATIENT, "scenario_field": "Age", "scenario_start": "20",
+                  "scenario_stop": "60", "scenario_count": "5"}
+        invalid = [{"scenario_field": "Occupation"}, {"scenario_start": "nan"},
+                   {"scenario_stop": "inf"}, {"scenario_start": "70"},
+                   {"scenario_stop": "121"}, {"scenario_count": "26"},
+                   {"scenario_count": "1"}, {"scenario_count": "3.5"}, {"Age": "0"}]
+        for changes in invalid:
+            with self.subTest(changes=changes), patch("src.web.predict_many") as batch:
+                status, _, body = self.request("POST", "/explore", urlencode({**values, **changes}),
+                                              {"Content-Type": "application/x-www-form-urlencoded"})
+            self.assertEqual(status, 400)
+            batch.assert_not_called()
+            self.assertIn('value="' + str(changes.get("scenario_stop", "60")) + '"', body)
+
+    def test_scenario_model_failure_is_a_service_error(self):
+        values = {**DEFAULT_PATIENT, "scenario_field": "Age", "scenario_start": "20",
+                  "scenario_stop": "60", "scenario_count": "5"}
+        with patch("src.web.predict_many", side_effect=OSError("private path")):
+            status, _, body = self.request("POST", "/explore", urlencode(values),
+                                          {"Content-Type": "application/x-www-form-urlencoded"})
+        self.assertEqual(status, 503)
+        self.assertNotIn("private path", body)
+
     def test_json_api_single_and_batch_predictions_match_cli_in_input_order(self) -> None:
         for records in (DEFAULT_PATIENT, [DEFAULT_PATIENT, {**DEFAULT_PATIENT, "Age": 55, "Occupation": "Ingénieur"}]):
             with self.subTest(batch=isinstance(records, list)):

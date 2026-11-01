@@ -1,0 +1,19 @@
+<section class="comparison-intro">
+  <h2>Explore one input across a range</h2>
+  <p>Keep a base profile fixed and vary one numeric field across evenly spaced values. This shows how the model responds to hypothetical inputs, not what changing a habit would cause or what treatment to choose.</p>
+</section>
+$feedback
+<form action="/explore" method="post">
+  <fieldset><legend>Base patient profile</legend><div class="fields">$fields</div></fieldset>
+  <fieldset class="evaluation-upload"><legend>Scenario range</legend>
+    <div class="fields">
+      <label for="scenario-field">Field to vary<select id="scenario-field" name="scenario_field">$options</select></label>
+      <label for="scenario-count">Number of points · 2–25<input id="scenario-count" name="scenario_count" type="number" min="2" max="25" step="1" value="$count" required></label>
+      <label for="scenario-start">Start value<input id="scenario-start" name="scenario_start" type="number" step="any" value="$start" required></label>
+      <label for="scenario-stop">End value<input id="scenario-stop" name="scenario_stop" type="number" step="any" value="$stop" required></label>
+    </div>
+  </fieldset>
+  <p class="hint">All base profile fields must be valid. Both endpoints are included. Scenario values replace the chosen base field; all other fields remain fixed. Decimal values are allowed.</p>
+  <button type="submit">Explore predictions →</button>
+</form>
+<p class="privacy">Runs locally. The server does not store the scenario profiles. Download the CSV to keep the complete inputs and predictions.</p>
