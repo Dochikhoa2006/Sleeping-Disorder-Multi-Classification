@@ -523,3 +523,23 @@ Standard output contains only the requested JSON array or CSV, so another progra
 can parse it directly. The educational disclaimer goes to standard error in this
 mode. Input validation completes before prediction or output; CSV exports retain
 extra columns and quoted values. `--validate-only` also accepts standard input.
+
+### Audit an entire JSON batch before prediction
+
+The audit command checks every patient record without loading the model. Unlike
+prediction, which stops at the first invalid patient, it reports a validation
+result for each record so multiple bad records can be fixed together:
+
+```bash
+python -m src.audit --input-json patients.json --output audit.json
+cat examples/patient.json | python -m src.audit --input-json -
+```
+
+The JSON report contains total, valid, and invalid counts and a `records` array
+with 1-based `patient` numbers, `valid` flags, and the first validation error for
+each invalid record. It does not include patient field values. Omit `--output`
+(or use `--output -`) for machine-readable standard output. Exit status is 0
+when all records are valid and 1 when any are invalid. Invalid records still
+produce a complete report. Malformed JSON, duplicate keys, empty batches, and
+non-object entries are file-level errors and do not replace an existing report.
+File reports are written atomically, and the input file cannot be overwritten.
