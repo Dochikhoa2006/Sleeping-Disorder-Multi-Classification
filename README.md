@@ -562,3 +562,12 @@ the report. UTF-8 files with a byte order mark are supported. Invalid headers,
 malformed quoting, and files without data rows are file-level errors that leave
 an existing report untouched. As with JSON audits, invalid records produce the
 complete report and exit status 1; fully valid batches exit with status 0.
+
+### Prepare a new batch in the browser
+
+Open `/guide` in the local web app for a reference to every required field,
+units, numeric bounds, and CSV formatting. The **Input guide** navigation link
+is available on every app page. Download `/template.csv` for a header-only CSV
+with the 11 required columns, fill in one or more patient rows, then upload it
+for batch prediction. The existing `/example.csv` still provides synthetic
+sample records. The guide and blank template work without loading a model.

@@ -636,6 +636,36 @@ class WebTests(unittest.TestCase):
             "Origin": "https://example.com",
         })[0], 403)
 
+    def test_blank_template_contains_only_the_required_header(self) -> None:
+        from src.preprocessing import RAW_FEATURES
+        with patch("src.predict.joblib.load") as load:
+            status, headers, body = self.request("GET", "/template.csv")
+        load.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertIn("text/csv", headers["Content-Type"])
+        self.assertIn('patient-template.csv', headers["Content-Disposition"])
+        self.assertEqual(list(csv.reader(StringIO(body))), [RAW_FEATURES])
+        # Filling the downloaded template produces a usable prediction upload.
+        output = StringIO(newline="")
+        output.write(body)
+        csv.writer(output).writerow([DEFAULT_PATIENT[key] for key in RAW_FEATURES])
+        status, _, predictions = self.upload(output.getvalue().encode())
+        self.assertEqual(status, 200)
+        self.assertEqual(list(csv.DictReader(StringIO(predictions)))[0][PREDICTION_COLUMN], predict(DEFAULT_PATIENT))
+
+    def test_input_guide_lists_all_fields_and_is_linked_from_home(self) -> None:
+        from src.preprocessing import RAW_FEATURES
+        with patch("src.predict.joblib.load") as load:
+            status, headers, body = self.request("GET", "/guide")
+        load.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        for feature in RAW_FEATURES:
+            self.assertIn(f'<th scope="row">{feature}</th>', body)
+        self.assertIn('href="/template.csv"', body)
+        self.assertIn('not clinical reference ranges', body)
+        self.assertIn('href="/guide"', self.request("GET", "/")[2])
+
     def test_example_csv_can_be_downloaded(self) -> None:
         status, headers, body = self.request("GET", "/example.csv")
         self.assertEqual(status, 200)

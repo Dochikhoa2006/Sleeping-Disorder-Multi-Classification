@@ -1,0 +1,24 @@
+<section class="model-heading">
+  <div><p class="eyebrow">PREPARE YOUR DATA</p><h2>Patient input guide</h2>
+    <p>Use these exact column names for CSV files and keys for JSON records. All 11 fields are required for each patient.</p>
+  </div>
+  <a class="download-link" href="/template.csv" download>Download blank CSV template ↓</a>
+</section>
+<section class="model-panel">
+  <h2>Fields, units, and accepted values</h2>
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Patient field reference">
+    <table><caption>Input validation rules</caption><thead><tr><th scope="col">Column / JSON key</th><th scope="col">Meaning / unit</th><th scope="col">Accepted input</th></tr></thead><tbody>$rows</tbody></table>
+  </div>
+  <p class="hint">These ranges describe what the software accepts. They are not clinical reference ranges or treatment advice.</p>
+</section>
+<section class="model-panel">
+  <h2>Build a new CSV</h2>
+  <ol>
+    <li>Download the blank template and keep the header names unchanged.</li>
+    <li>Add one patient per row, filling every required field. Save as UTF-8 CSV.</li>
+    <li>Open <a href="/#batch-upload">the batch upload form</a> to preview predictions and download the completed results.</li>
+  </ol>
+  <p>The blank template contains only a header; add at least one patient before uploading. For a working demonstration, <a href="/example.csv" download>download the synthetic example CSV</a>.</p>
+  <p>Extra columns such as record IDs are preserved. Headers must be unique and non-empty. Omit any existing “Predicted Sleep Disorder” column before prediction. Quote CSV values that contain commas or line breaks.</p>
+  <p>Numeric fields must contain numbers without unit suffixes. Categorical text is trimmed before preprocessing; unfamiliar categories may be accepted but acceptance does not establish model reliability.</p>
+</section>

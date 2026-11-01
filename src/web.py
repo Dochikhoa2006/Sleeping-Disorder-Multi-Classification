@@ -50,6 +50,27 @@ LABELS = {
 }
 
 
+def render_input_guide() -> str:
+    """Explain the input format without inspecting the model or patient data."""
+    notes = {
+        "Gender": "Non-empty text, for example Male or Female.",
+        "Occupation": "Non-empty text, for example Software Engineer.",
+        "BMI Category": "Non-empty text. Common values: Normal, Normal Weight, Overweight, Obese. Normal Weight is normalized to Normal.",
+        "Blood Pressure": "Systolic/diastolic, for example 120/80. Systolic: 50–300; diastolic: 30–200. Systolic must exceed diastolic.",
+    }
+    rows = []
+    for feature in RAW_FEATURES:
+        if feature in LIMITS:
+            low, high = LIMITS[feature]
+            rule = f"Number from {low} to {high}, inclusive."
+        else:
+            rule = notes[feature]
+        rows.append(f'<tr><th scope="row">{escape(feature)}</th>'
+                    f'<td>{escape(LABELS.get(feature, feature))}</td><td>{escape(rule)}</td></tr>')
+    workspace = Template(TEMPLATE_PATH.with_name("web_input_guide.html").read_text(encoding="utf-8")).substitute(rows="".join(rows))
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
+
+
 def render_fields(values: dict, prefix: str = "") -> str:
     fields = []
     for index, feature in enumerate(RAW_FEATURES):
@@ -387,6 +408,13 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765) -> Thre
                                   allow="POST" if self.path == "/api/predict" else None)
             elif self.path == "/":
                 self.respond(200, render_page())
+            elif self.path == "/guide":
+                self.respond(200, render_input_guide())
+            elif self.path == "/template.csv":
+                output = StringIO(newline="")
+                csv.writer(output).writerow(RAW_FEATURES)
+                self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8",
+                             filename="patient-template.csv")
             elif self.path == "/compare":
                 self.respond(200, render_comparison())
             elif self.path == "/evaluate":
