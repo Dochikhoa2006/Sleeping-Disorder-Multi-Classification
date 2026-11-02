@@ -641,3 +641,31 @@ the complete report; omit it to report differences without failing a workflow.
 Agreement measures consistency between versions, not accuracy: this command does
 not use ground-truth labels or establish that either model is better. Only load
 trusted joblib artifacts, as loading one can execute Python code.
+
+### Personal sleep diary (independent of the model)
+
+Keep a local diary without running predictions or installing ML dependencies:
+
+```bash
+python -m src.diary add --date 2026-11-01 --bedtime 23:00 --wake-time 07:00 \
+  --awake-minutes 30 --quality 8
+python -m src.diary summary --end 2026-11-02 --days 7
+```
+
+The date identifies the night you went to bed. An earlier wake time is interpreted
+as the next morning. `--awake-minutes` is your estimate of total awake time in
+bed, including time to fall asleep; it defaults to zero. Quality is an optional
+personal rating from 1 to 10. Estimated sleep is time in bed minus awake minutes.
+Times use 24-hour `HH:MM`; identical bedtime/wake times are rejected. Calculations
+use wall-clock times and do not adjust for daylight saving or time-zone changes.
+
+Entries are stored in `data/sleep_diary.csv`, which is excluded from Git. Use
+`python -m src.diary --file /path/to/my-diary.csv ...` for another location.
+This CSV has its own format and is separate from classifier patient inputs.
+Adding the same date requires `--replace`, and writes are atomic. Summaries are
+JSON and include recorded/unrecorded nights, nightly estimates, average estimated
+hours, and average of available quality ratings. Missing nights are never counted
+as zero sleep; empty averages are `null`. The default summary covers seven days
+ending today. No diary data is sent anywhere. These are self-reported estimates,
+not measurements or a medical assessment. This is a local, single-writer tool;
+avoid simultaneous edits from multiple processes.
