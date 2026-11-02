@@ -37,6 +37,7 @@ jobs:
           python -m src.predict --input-json examples/patient.json --output-json "$RUNNER_TEMP/example-predictions.json"
           python -m src.predict --input-csv examples/patients.csv --output-csv "$RUNNER_TEMP/example-predictions.csv"
           python -m src.model_info --include-features > "$RUNNER_TEMP/example-model-info.json"
+          python -m src.compare_models --baseline models/sleep_disorder_pipeline.joblib --candidate models/sleep_disorder_pipeline.joblib --input-csv examples/patients.csv --fail-on-change > "$RUNNER_TEMP/example-model-comparison.json"
 
   security:
     name: Security

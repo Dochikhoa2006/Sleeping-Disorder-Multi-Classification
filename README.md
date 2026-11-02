@@ -616,3 +616,28 @@ Normal `python -m src.web` use still binds only to `127.0.0.1`. Keep the Compose
 port mapping bound to `127.0.0.1`: the app has no authentication and is intended
 for local use. The container CI job builds the image and checks a prediction
 under the same read-only runtime settings.
+
+### Compare model versions before replacing an artifact
+
+Run both trusted model artifacts against the same validated patient batch:
+
+```bash
+python -m src.compare_models \
+  --baseline models/sleep_disorder_pipeline.joblib \
+  --candidate /path/to/candidate.joblib \
+  --input-csv examples/patients.csv \
+  --output model-changes.json --fail-on-change
+```
+
+Use `--input-json` instead for a single patient object or JSON batch. The JSON
+report includes both artifact SHA-256 hashes, agreement rate, changed/unchanged
+counts, class-to-class transition counts, and 1-based patient indices for every
+changed prediction. It omits patient field values. Without `--output`, standard
+output contains only JSON. Reports are saved atomically and cannot overwrite
+input or model paths. All patient records are validated before loading models.
+
+`--fail-on-change` exits with status 1 if any prediction differs, after writing
+the complete report; omit it to report differences without failing a workflow.
+Agreement measures consistency between versions, not accuracy: this command does
+not use ground-truth labels or establish that either model is better. Only load
+trusted joblib artifacts, as loading one can execute Python code.
