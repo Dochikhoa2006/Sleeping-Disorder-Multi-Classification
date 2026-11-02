@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from src.diary import add_night, load_diary, main, night_metrics, summarize
+from src.diary import add_night, load_diary, main, night_metrics, summarize, render_report
 
 
 class DiaryTests(unittest.TestCase):
@@ -81,3 +81,41 @@ class DiaryTests(unittest.TestCase):
         for days in (0, 367):
             with self.assertRaises(ValueError):
                 summarize([], date(2026, 11, 2), days)
+
+    def test_html_report_shows_missing_nights_and_exact_values(self):
+        report = summarize([self.night()], date(2026, 11, 2), 3)
+        html = render_report(report)
+        self.assertEqual(html.count('Not recorded</td>'), 2)
+        self.assertIn('7.50 h estimated sleep', html)
+        self.assertIn('8.00 h</td>', html)
+        self.assertIn('width:31.2500%', html)
+        self.assertIn('width:33.3333%', html)
+        self.assertIn('1 recorded', html)
+        self.assertNotIn('<script', html)
+        self.assertNotIn('https://', html)
+
+    def test_empty_report_has_no_invented_zero_sleep(self):
+        html = render_report(summarize([], date(2026, 11, 2), 7))
+        self.assertIn('No entries', html)
+        self.assertEqual(html.count('Not recorded</td>'), 7)
+        self.assertNotIn('0.00 h estimated sleep', html)
+
+    def test_cli_html_export_preserves_json_stdout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            diary = Path(directory) / 'diary.csv'
+            output = Path(directory) / 'report.html'
+            add_night(diary, self.night())
+            with patch('sys.argv', ['diary', '--file', str(diary), 'summary', '--end', '2026-11-02', '--html', str(output)]), redirect_stdout(StringIO()) as stdout:
+                main()
+            self.assertEqual(json.loads(stdout.getvalue())['recorded_nights'], 1)
+            self.assertIn('7.50 h estimated sleep', output.read_text())
+
+    def test_html_export_cannot_overwrite_diary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            diary = Path(directory) / 'diary.csv'
+            add_night(diary, self.night())
+            before = diary.read_bytes()
+            with patch('sys.argv', ['diary', '--file', str(diary), 'summary', '--html', str(diary)]):
+                with self.assertRaisesRegex(SystemExit, 'differ'):
+                    main()
+            self.assertEqual(diary.read_bytes(), before)

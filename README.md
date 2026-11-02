@@ -669,3 +669,18 @@ as zero sleep; empty averages are `null`. The default summary covers seven days
 ending today. No diary data is sent anywhere. These are self-reported estimates,
 not measurements or a medical assessment. This is a local, single-writer tool;
 avoid simultaneous edits from multiple processes.
+
+### Export a visual diary report
+
+```bash
+python -m src.diary summary --days 14 --html sleep-report.html
+```
+
+Open `sleep-report.html` in a browser for nightly bars showing estimated sleep
+and time in bed, exact durations, optional quality ratings, and period averages.
+Every date has a row, so missing nights remain visible rather than appearing as
+zero sleep. Bars share a 0–24 hour scale. The self-contained report works offline,
+contains no scripts or external assets, and includes a layout for printing or
+saving to PDF. The command still emits the normal JSON summary on standard output.
+HTML exports are atomic and cannot replace the diary CSV. The report contains
+your diary information; choose where to store it and whom to share it with.

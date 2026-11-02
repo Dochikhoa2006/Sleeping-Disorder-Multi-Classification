@@ -34,7 +34,7 @@ jobs:
       - name: Verify diary works without third-party packages
         run: |
           python -S -m src.diary --file "$RUNNER_TEMP/diary.csv" add --date 2026-11-01 --bedtime 23:00 --wake-time 07:00 --awake-minutes 30 --quality 8
-          python -S -m src.diary --file "$RUNNER_TEMP/diary.csv" summary --end 2026-11-02 --days 7
+          python -S -m src.diary --file "$RUNNER_TEMP/diary.csv" summary --end 2026-11-02 --days 7 --html "$RUNNER_TEMP/diary-report.html"
 
       - name: Run documented example workflows
         run: |

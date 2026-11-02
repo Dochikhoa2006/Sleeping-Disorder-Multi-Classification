@@ -6,6 +6,8 @@ import argparse
 import csv
 from datetime import date, timedelta
 import json
+from html import escape
+from string import Template
 from pathlib import Path
 import re
 
@@ -95,6 +97,39 @@ def summarize(records: list[dict], end: date, days: int = 7) -> dict:
             "nights": nights}
 
 
+def render_report(report: dict) -> str:
+    """Create a portable, script-free chart with an explicit row for missing nights."""
+    nights = {row["date"]: row for row in report["nights"]}
+    start, end = parse_date(report["start_date"]), parse_date(report["end_date"])
+    rows = []
+    current = start
+    while current <= end:
+        day = current.isoformat()
+        night = nights.get(day)
+        if night is None:
+            details = '<td class="missing" colspan="3">Not recorded</td>'
+        else:
+            sleep = night["estimated_sleep_minutes"]
+            bed = night["time_in_bed_minutes"]
+            quality = str(night["quality"]) if night["quality"] is not None else "Not rated"
+            details = (f'<td><div class="track" aria-hidden="true"><span class="bed" style="width:{bed / 1440 * 100:.4f}%"></span>'
+                       f'<span class="sleep" style="width:{sleep / 1440 * 100:.4f}%"></span></div>'
+                       f'<span>{sleep / 60:.2f} h estimated sleep</span></td>'
+                       f'<td>{bed / 60:.2f} h</td><td>{escape(quality)}</td>')
+        rows.append(f'<tr><th scope="row"><time datetime="{day}">{day}</time></th>{details}</tr>')
+        if current == end:
+            break
+        current += timedelta(days=1)
+    average = report["average_estimated_sleep_hours"]
+    quality = report["average_quality"]
+    return Template(Path(__file__).with_name("diary_report.html").read_text(encoding="utf-8")).substitute(
+        start=escape(report["start_date"]), end=escape(report["end_date"]),
+        recorded=report["recorded_nights"], missing=report["unrecorded_nights"],
+        average=f"{average:.2f} h" if average is not None else "No entries",
+        quality=f"{quality:.2f} / 10" if quality is not None else "Not rated",
+        rows="".join(rows))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--file", type=Path, default=DEFAULT_DIARY, help="Local diary CSV (default: data/sleep_diary.csv).")
@@ -109,6 +144,7 @@ def main() -> None:
     summary = commands.add_parser("summary", help="Print a date-range summary as JSON.")
     summary.add_argument("--end", default=date.today().isoformat())
     summary.add_argument("--days", type=int, default=7)
+    summary.add_argument("--html", type=Path, help="Also save a printable, self-contained HTML chart.")
     args = parser.parse_args()
     try:
         if args.command == "add":
@@ -118,7 +154,13 @@ def main() -> None:
             add_night(args.file, record, replace=args.replace)
             print(f"Saved night {args.date} to {args.file}")
         else:
-            print(json.dumps(summarize(load_diary(args.file), parse_date(args.end), args.days), indent=2, allow_nan=False))
+            if args.html and args.html.resolve() == args.file.resolve():
+                raise ValueError("HTML report path must differ from the diary path.")
+            report = summarize(load_diary(args.file), parse_date(args.end), args.days)
+            if args.html:
+                with atomic_text_output(args.html) as output:
+                    output.write(render_report(report))
+            print(json.dumps(report, indent=2, allow_nan=False))
     except (OSError, ValueError, TypeError, csv.Error, OverflowError) as error:
         raise SystemExit(f"Error: {error}") from error
 

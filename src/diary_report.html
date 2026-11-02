@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'">
+  <title>Sleep diary · $start to $end</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 36px 22px; font: 15px/1.5 system-ui, sans-serif; background: #f5f4ef; color: #18342f; }
+    main { max-width: 960px; margin: auto; }
+    h1 { font-size: clamp(30px, 5vw, 48px); line-height: 1.15; margin-bottom: 10px; }
+    .eyebrow { letter-spacing: .14em; font-size: 12px; font-weight: 700; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 28px 0; }
+    .stats article { background: white; border: 1px solid #cdd7cf; border-radius: 12px; padding: 20px; }
+    .stats strong { display: block; font-size: 25px; }
+    .stats p { margin: 0; }
+    .chart { background: white; padding: 22px; border-radius: 12px; border: 1px solid #cdd7cf; }
+    .scroll { overflow-x: auto; }
+    table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 13px; }
+    caption { text-align: left; font-size: 21px; font-weight: 700; margin: 0 0 12px; }
+    th, td { padding: 12px 8px; border-bottom: 1px solid #d5ddd6; text-align: left; }
+    th:first-child { width: 120px; }
+    td:nth-child(2) { width: 50%; }
+    .track { height: 16px; width: 100%; background: #f0f3ef; position: relative; margin-bottom: 5px; border-radius: 4px; overflow: hidden; }
+    .track span { position: absolute; left: 0; top: 0; height: 100%; }
+    .bed { background: #bdd3c5; }
+    .sleep { background: #1d6651; }
+    .missing { color: #53675e; font-style: italic; }
+    .note, footer { font-size: 13px; color: #53675e; }
+    footer { margin-top: 24px; }
+    .scroll:focus-visible { outline: 3px solid #1d6651; outline-offset: 3px; }
+    @media (max-width: 620px) { .stats { grid-template-columns: 1fr; } }
+    @page { margin: 15mm; }
+    @media print {
+      body { background: white; padding: 0; color: black; }
+      main { max-width: none; }
+      .chart { padding: 0; border: 0; }
+      .scroll { overflow: visible; }
+      table { min-width: 0; font-size: 10pt; }
+      tr, .stats { break-inside: avoid; }
+      .track { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header><p class="eyebrow">PERSONAL SLEEP DIARY</p><h1>Your nights at a glance</h1><p>$start through $end · dated by bedtime</p></header>
+  <section class="stats" aria-label="Diary summary">
+    <article><strong>$average</strong><p>Average estimated sleep per recorded night</p></article>
+    <article><strong>$recorded recorded</strong><p>$missing nights without entries</p></article>
+    <article><strong>$quality</strong><p>Average of available quality ratings</p></article>
+  </section>
+  <section class="chart">
+    <p class="note">Each bar uses a 0–24 hour scale. Dark green shows estimated sleep; pale green shows total time in bed. Exact values appear below the bars. Missing nights are shown explicitly and excluded from averages.</p>
+    <div class="scroll" tabindex="0" role="region" aria-label="Scrollable nightly sleep chart">
+      <table><caption>Nightly estimates</caption><thead><tr><th scope="col">Bedtime date</th><th scope="col">Estimated sleep · 0–24 h</th><th scope="col">Time in bed</th><th scope="col">Quality · 1–10</th></tr></thead><tbody>$rows</tbody></table>
+    </div>
+  </section>
+  <footer><p>Self-reported estimates, not measurements or a medical assessment. Estimated sleep subtracts reported awake minutes from time in bed. Wall-clock calculations do not adjust for daylight saving or time-zone changes.</p><p>This file contains diary information. Store and share it deliberately.</p><p class="no-print">Use your browser’s Print command to print this report or save it as PDF.</p></footer>
+</main>
+</body>
+</html>
