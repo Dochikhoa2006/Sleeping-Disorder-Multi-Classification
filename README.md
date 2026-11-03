@@ -711,3 +711,30 @@ are rejected. The output directory must not already exist. All files are staged
 before the directory is published, so validation failures leave no partial split.
 No model is loaded or trained. Exported files contain patient data; store them
 outside version control, for example beneath the ignored `data/` directory.
+
+### Measure which inputs the model relies on
+
+```bash
+python -m src.importance --data unseen-labeled-patients.csv \
+  --model models/sleep_disorder_pipeline.joblib --repeats 5 --output importance.json
+```
+
+This measures permutation importance for each of the 11 raw input fields: shuffle
+one field at a time among unseen records and measure the decrease in macro F1.
+The report ranks fields by mean score drop and includes every repeat, standard
+deviation, baseline score, class counts, training-overlap exclusions, and input/
+model hashes. Blood pressure is shuffled as one raw field. No model is retrained.
+
+The CSV must satisfy patient input validation and contain explicit `Sleep Disorder`
+labels known to the model. Profiles matching its stored training fingerprints are
+excluded; a model without fingerprints or a dataset with no unseen profiles is
+rejected. Repeated unseen rows remain included; unique-profile counts are reported.
+Use 2–30 repeats and `--seed` for reproducibility under the same dependency versions.
+Omit `--output` for JSON on standard output. File reports are atomic and cannot
+replace the source data or model. Only load trusted model artifacts.
+
+A larger positive drop indicates greater reliance on that field for this dataset
+and metric. Negative drops are possible. Correlated fields can mask one another,
+and small or unbalanced evaluation sets can produce unstable rankings. These
+scores explain model behavior, not causation, clinical importance, or individual
+patient outcomes. Check baseline performance before interpreting the ranking.
