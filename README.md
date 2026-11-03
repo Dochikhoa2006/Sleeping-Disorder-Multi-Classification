@@ -738,3 +738,30 @@ and metric. Negative drops are possible. Correlated fields can mask one another,
 and small or unbalanced evaluation sets can produce unstable rankings. These
 scores explain model behavior, not causation, clinical importance, or individual
 patient outcomes. Check baseline performance before interpreting the ranking.
+
+### Compare incoming data with a reference batch
+
+```bash
+python -m src.drift --reference reference-patients.csv --current new-patients.csv \
+  --output input-drift.json
+```
+
+This model-free report compares validated patient CSVs using the same feature
+engineering as training. Numeric fields include mean, median, range, population
+standard deviation, mean change, standardized mean change (using the reference
+standard deviation), and empirical Kolmogorov–Smirnov distance. A constant
+reference yields `null` for standardized mean change rather than dividing by zero.
+Blood pressure is compared as systolic, diastolic, and its engineered category.
+
+Categorical fields include counts and shares, new/absent categories, and total
+variation distance. BMI aliases and whitespace are normalized as in the model.
+Both distances range from 0 (identical empirical distributions) to 1. These are
+descriptive distances, not significance tests or automatic drift thresholds.
+Differences can reflect sample size, sampling choices, or genuine population
+changes; they do not establish reduced model accuracy or a clinical conclusion.
+
+The report includes input row counts and SHA-256 hashes. Labels and extra columns
+are ignored; all records are weighted equally, including duplicates. No model is
+loaded, and labels are not required. Omit `--output` for JSON on standard output.
+File reports are atomic and cannot overwrite either input. Reports include
+aggregate category names, so consider their contents before sharing them.
