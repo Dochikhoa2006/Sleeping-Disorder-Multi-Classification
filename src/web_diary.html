@@ -1,0 +1,27 @@
+<section class="model-heading">
+  <div><p class="eyebrow">PERSONAL SLEEP DIARY</p><h2>Keep track of your nights</h2><p>$summary</p></div>
+  <a class="download-link" href="/diary.csv" download>Download diary CSV ↓</a>
+</section>
+$feedback
+<form action="/diary" method="post">
+  <h2>Record or update a night</h2>
+  <div class="fields">
+    <label for="night-date">Date you went to bed<input id="night-date" name="date" type="date" value="$date" required></label>
+    <label for="night-quality">Quality · optional, 1–10<input id="night-quality" name="quality" type="number" min="1" max="10" step="1" value="$quality"></label>
+    <label for="night-bed">Bedtime · 24-hour time<input id="night-bed" name="bedtime" type="time" value="$bedtime" required></label>
+    <label for="night-wake">Wake time · 24-hour time<input id="night-wake" name="wake_time" type="time" value="$wake_time" required></label>
+    <label for="night-awake">Awake minutes in bed, including time to fall asleep<input id="night-awake" name="awake_minutes" type="number" min="0" max="1439" step="1" value="$awake_minutes" required></label>
+    <label for="night-replace">Replace an existing entry for this date<input id="night-replace" name="replace" type="checkbox" value="1"$checked></label>
+  </div>
+  <p class="hint">An earlier wake time means the next morning. Estimated sleep subtracts awake minutes from time in bed. Wall-clock calculations do not adjust for daylight saving or time-zone changes.</p>
+  <button type="submit">Save night →</button>
+</form>
+<section class="model-panel">
+  <h2>Recent nights</h2><p>$total entries in the diary; showing the most recent 90.</p>
+  <p><a href="/diary-report" target="_blank">Open printable 30-day report ↗</a></p>
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Diary entries">
+    <table><caption>Nightly records</caption><thead><tr><th scope="col">Bedtime date</th><th scope="col">Bedtime</th><th scope="col">Wake time</th><th scope="col">Estimated sleep</th><th scope="col">Quality</th></tr></thead><tbody>$rows</tbody></table>
+  </div>
+</section>
+<p class="privacy">Diary entries are saved in the local CSV configured when the server starts. This page is separate from classifier inputs and is accessible to anyone using this local server. Downloads and reports contain diary information. No data is sent to an external service.</p>
+<p class="limits">These are personal, self-reported estimates, not measurements or a medical assessment. The browser diary works without running the classifier.</p>

@@ -765,3 +765,24 @@ are ignored; all records are weighted equally, including duplicates. No model is
 loaded, and labels are not required. Omit `--output` for JSON on standard output.
 File reports are atomic and cannot overwrite either input. Reports include
 aggregate category names, so consider their contents before sharing them.
+
+### Manage the diary in your browser
+
+```bash
+python -m src.web --diary data/sleep_diary.csv
+```
+
+Open `/diary` or choose **Sleep diary** in the navigation. The form records
+bedtime, wake time, awake minutes, and an optional quality rating. Updating an
+existing night requires the explicit replacement checkbox. The page shows a
+seven-day summary and the most recent 90 entries; download all entries as a
+CLI-compatible diary CSV or open a printable 30-day report.
+
+Diary storage is disabled unless `--diary` is supplied. The parent directory
+must exist. Diary entries are persisted in that local CSV, unlike classifier
+form submissions; anyone using this local server can view them. The CSV is
+compatible with `src.diary`. The page uses no cookies or browser storage.
+Do not run the CLI or another server against the same diary while editing it
+in the browser. The default read-only Docker Compose setup does not enable diary
+storage. Predictions never use diary records, and diary routes never load the
+classifier. To disable browser diary access, restart without `--diary`.

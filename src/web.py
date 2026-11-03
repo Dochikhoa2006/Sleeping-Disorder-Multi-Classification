@@ -8,7 +8,7 @@ from collections import Counter
 import csv
 import json
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from email import policy
 from email.parser import BytesParser
 from html import escape
@@ -16,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import StringIO
 from pathlib import Path
 from string import Template
+from threading import Lock
 from urllib.parse import parse_qs
 
 from src.predict import (
@@ -25,6 +26,7 @@ from src.predict import (
 from src.preprocessing import RAW_FEATURES
 from src.model_info import inspect_model
 from src.evaluation import evaluate_bytes
+from src.diary import COLUMNS as DIARY_COLUMNS, add_night, load_diary, night_metrics, summarize, render_report as render_diary_report
 
 TEMPLATE_PATH = Path(__file__).with_name("web_ui.html")
 EXAMPLE_CSV_PATH = Path(__file__).resolve().parents[1] / "examples" / "patients.csv"
@@ -68,6 +70,36 @@ def render_input_guide() -> str:
         rows.append(f'<tr><th scope="row">{escape(feature)}</th>'
                     f'<td>{escape(LABELS.get(feature, feature))}</td><td>{escape(rule)}</td></tr>')
     workspace = Template(TEMPLATE_PATH.with_name("web_input_guide.html").read_text(encoding="utf-8")).substitute(rows="".join(rows))
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
+
+
+def render_diary(records: list[dict] | None = None, *, values: dict | None = None,
+                 error: str | None = None, saved: bool = False) -> str:
+    if records is None:
+        workspace = ('<section class="model-panel"><h2>Enable your local diary</h2>'
+                     '<p>Start the app with <code>python -m src.web --diary data/sleep_diary.csv</code> to enable diary storage.</p>'
+                     '<p>The diary is optional. It saves nightly records to the local CSV you choose, separate from patient predictions.</p></section>')
+    else:
+        values = values or {"date": (date.today() - timedelta(days=1)).isoformat(),
+                            "bedtime": "23:00", "wake_time": "07:00", "awake_minutes": "0", "quality": ""}
+        rows = []
+        for record in sorted(records, key=lambda row: row["date"], reverse=True)[:90]:
+            metrics = night_metrics(record)
+            cells = [record["date"], record["bedtime"], record["wake_time"],
+                     f'{metrics["estimated_sleep_minutes"] / 60:.2f} h',
+                     record["quality"] or "Not rated"]
+            rows.append('<tr>' + ''.join(f'<td>{escape(str(cell))}</td>' for cell in cells) + '</tr>')
+        report = summarize(records, date.today(), 7)
+        average = report["average_estimated_sleep_hours"]
+        summary = f'{report["recorded_nights"]} recorded nights in the last 7 days; '
+        summary += f'{average:.2f} h average estimated sleep.' if average is not None else 'no sleep estimates yet.'
+        feedback = (f'<p class="feedback error" role="alert">{escape(error)}</p>' if error else
+                    '<p class="feedback result" role="status">Night saved to your local diary.</p>' if saved else '')
+        workspace = Template(TEMPLATE_PATH.with_name("web_diary.html").read_text(encoding="utf-8")).substitute(
+            **{key: escape(str(values.get(key, "")), quote=True) for key in DIARY_COLUMNS},
+            checked=' checked' if values.get("replace") == "1" else '', feedback=feedback,
+            summary=escape(summary), total=len(records),
+            rows=''.join(rows) or '<tr><td colspan="5">No nights recorded yet.</td></tr>')
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
 
@@ -419,7 +451,11 @@ def render_evaluation(report: dict | None = None, *, error: str | None = None, d
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
 
-def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind: str = "127.0.0.1") -> ThreadingHTTPServer:
+def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind: str = "127.0.0.1", diary_path: Path | None = None) -> ThreadingHTTPServer:
+    if diary_path is not None and diary_path.resolve() == model_path.resolve():
+        raise ValueError("Diary path must differ from model path.")
+    diary_lock = Lock()
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args) -> None:
             # Patient input is neither persisted nor written to access logs.
@@ -465,6 +501,8 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                                   allow="POST" if self.path == "/api/predict" else None)
             elif self.path == "/":
                 self.respond(200, render_page())
+            elif self.path in ("/diary", "/diary.csv", "/diary-report"):
+                self.diary_get()
             elif self.path == "/explore":
                 self.respond(200, render_scenarios())
             elif self.path == "/guide":
@@ -508,6 +546,9 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                     self.respond_json(405 if self.path == "/api/health" else 404,
                                       {"error": "Use GET for the health check." if self.path == "/api/health" else "API route not found."},
                                       allow="GET" if self.path == "/api/health" else None)
+                return
+            if self.path == "/diary":
+                self.diary_add()
                 return
             if self.path == "/evaluate":
                 self.evaluate_upload()
@@ -563,6 +604,61 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 self.respond(200, render_patient_report(values, result))
             else:
                 self.respond(200, renderer(values, result=result))
+
+        def diary_get(self) -> None:
+            if diary_path is None:
+                self.respond(200 if self.path == "/diary" else 404, render_diary())
+                return
+            try:
+                with diary_lock:
+                    records = load_diary(diary_path)
+                if self.path == "/diary.csv":
+                    output = StringIO(newline="")
+                    writer = csv.DictWriter(output, fieldnames=DIARY_COLUMNS)
+                    writer.writeheader()
+                    writer.writerows(sorted(records, key=lambda row: row["date"]))
+                    self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8", filename="sleep-diary.csv")
+                elif self.path == "/diary-report":
+                    self.respond(200, render_diary_report(summarize(records, date.today(), 30)))
+                else:
+                    self.respond(200, render_diary(records))
+            except (OSError, ValueError, TypeError, csv.Error):
+                self.respond(503, "The diary could not be read. Check its format and file permissions.")
+
+        def diary_add(self) -> None:
+            if diary_path is None:
+                self.respond(403, render_diary())
+                return
+            if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+                self.respond(415, "Submit the diary form as URL-encoded data.")
+                return
+            values = {}
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 2048:
+                    self.respond(413, "Diary form must contain between 1 and 2048 bytes.")
+                    return
+                fields = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True, max_num_fields=6)
+                if any(len(items) != 1 for items in fields.values()):
+                    raise ValueError("Submit each diary field once.")
+                values = {key: items[0] for key, items in fields.items()}
+                record = {key: values.get(key, "") for key in DIARY_COLUMNS}
+                with diary_lock:
+                    add_night(diary_path, record, replace=values.get("replace") == "1")
+                    records = load_diary(diary_path)
+            except (ValueError, TypeError, UnicodeError, csv.Error) as error:
+                try:
+                    with diary_lock:
+                        records = load_diary(diary_path)
+                except (OSError, ValueError, TypeError, csv.Error):
+                    self.respond(503, "The diary could not be read. Check its format and file permissions.")
+                    return
+                self.respond(400, render_diary(records, values=values, error=str(error)))
+                return
+            except OSError:
+                self.respond(503, "The diary could not be saved. Check its directory and file permissions.")
+                return
+            self.respond(200, render_diary(records, saved=True))
 
         def batch_predict(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":
@@ -689,13 +785,16 @@ def main() -> None:
     parser.add_argument("--bind", choices=("127.0.0.1", "0.0.0.0"), default="127.0.0.1",
                         help="Listen address; use 0.0.0.0 inside a container with a loopback-only published port.")
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
+    parser.add_argument("--diary", type=Path, help="Enable browser diary storage at this local CSV path.")
     arguments = parser.parse_args()
     if not 1 <= arguments.port <= 65535:
         parser.error("--port must be between 1 and 65535.")
     if not arguments.model.is_file():
         parser.error(f"Model file does not exist: {arguments.model}")
+    if arguments.diary and arguments.diary.resolve() == arguments.model.resolve():
+        parser.error("--diary must differ from --model.")
     try:
-        with make_server(arguments.model, arguments.port, bind=arguments.bind) as server:
+        with make_server(arguments.model, arguments.port, bind=arguments.bind, diary_path=arguments.diary) as server:
             print(f"Open http://127.0.0.1:{server.server_port} · Press Ctrl+C to stop.", flush=True)
             server.serve_forever()
     except KeyboardInterrupt:

@@ -68,6 +68,7 @@
     .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     label { font-size: 12px; font-weight: 650; color: var(--muted); }
     input { display: block; width: 100%; padding: 12px; margin-top: 7px; font: inherit; font-size: 15px; color: var(--text); background: var(--input); border: 1px solid var(--input-border); border-radius: 8px; }
+    #night-replace { width: auto; min-width: 22px; min-height: 22px; }
     input:focus { outline: 3px solid var(--focus); outline-offset: 1px; }
     button { margin-top: 26px; background: var(--accent); border: 0; border-radius: 9px; color: var(--button-text); padding: 14px 23px; font: inherit; font-weight: 650; cursor: pointer; }
     button:hover { background: var(--button-hover); }
@@ -113,7 +114,7 @@
       <h1>A closer look at<br>sleep &amp; lifestyle.</h1>
       <p>Explore how a trained model classifies sleep and lifestyle details as Healthy, Insomnia, or Sleep Apnea.</p>
     </header>
-    <nav aria-label="Prediction tools"><a href="/">Single patient &amp; CSV</a><a href="/compare">Compare profiles</a><a href="/model">Model dashboard</a><a href="/evaluate">Evaluate labeled data</a><a href="/guide">Input guide</a><a href="/explore">Scenario explorer</a></nav>
+    <nav aria-label="Prediction tools"><a href="/">Single patient &amp; CSV</a><a href="/compare">Compare profiles</a><a href="/model">Model dashboard</a><a href="/evaluate">Evaluate labeled data</a><a href="/guide">Input guide</a><a href="/explore">Scenario explorer</a><a href="/diary">Sleep diary</a></nav>
     <div class="$layout_class">$workspace</div>
     <footer>Educational exploration only. Predictions are not medical advice or a diagnosis.</footer>
   </main>
