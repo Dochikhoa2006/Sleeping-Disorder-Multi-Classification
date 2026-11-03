@@ -684,3 +684,30 @@ contains no scripts or external assets, and includes a layout for printing or
 saving to PDF. The command still emits the normal JSON summary on standard output.
 HTML exports are atomic and cannot replace the diary CSV. The report contains
 your diary information; choose where to store it and whom to share it with.
+
+### Export reproducible training/test datasets
+
+```bash
+python -m src.split_data --input-csv labeled-patients.csv --output-dir experiment-split
+```
+
+This creates a new directory containing `train.csv`, `test.csv`, and
+`manifest.json`. Identical engineered patient profiles stay entirely on one side
+of the split, even when their record IDs differ. Original columns, extra values,
+and row order within each partition are retained. The manifest records input and
+output SHA-256 hashes, row/profile counts, class counts, and split parameters.
+
+The default uses test fold 0 of five stratified group folds with seed 150, aiming
+for roughly 20% test data; group sizes can change the exact fraction. Choose
+`--folds 2` through `--folds 20`, `--fold` (zero-based), and `--seed` explicitly
+for other experiments. The same inputs and parameters produce identical exports
+under the same dependency versions. Both partitions must cover every present
+class; an unsuitable fold is rejected rather than silently dropping a class.
+
+Inputs must satisfy prediction CSV validation and have explicit `Sleep Disorder`
+labels (`Healthy`, `Insomnia`, or `Sleep Apnea`). Each present class needs at
+least one unique profile per fold; conflicting labels for equivalent profiles
+are rejected. The output directory must not already exist. All files are staged
+before the directory is published, so validation failures leave no partial split.
+No model is loaded or trained. Exported files contain patient data; store them
+outside version control, for example beneath the ignored `data/` directory.
