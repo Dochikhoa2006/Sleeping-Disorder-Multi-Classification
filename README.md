@@ -822,3 +822,13 @@ tab open; refreshing or closing it resets the timer. Keyboard controls, screen
 reader status messages, reduced-motion preferences, and the existing light/dark
 themes are supported. Test its countdown and control behavior with
 `node --test tests/timer.test.cjs`; Node is needed only for these development tests.
+
+### Browse the diary by month
+
+The browser diary includes a Monday–Sunday calendar with estimated sleep and
+quality ratings for each recorded night. Use the month picker or previous/next
+links to browse; `/diary?month=2026-11` opens a specific month. The calendar shows
+missing entries explicitly and summarizes the selected month's recorded-night
+count and average estimated sleep. A recorded zero-hour estimate remains distinct
+from an unrecorded night. Saving a night opens its month automatically. Calendar
+browsing reads the configured diary without changing it or loading a model.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import calendar
 from collections import Counter
 import csv
 import json
@@ -17,7 +18,7 @@ from io import StringIO
 from pathlib import Path
 from string import Template
 from threading import Lock
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 from src.predict import (
     CSV_NUMERIC_FEATURES, DEFAULT_MODEL_PATH, PREDICTION_COLUMN,
@@ -73,8 +74,46 @@ def render_input_guide() -> str:
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
 
+def render_diary_calendar(records: list[dict], month: date) -> str:
+    first = month.replace(day=1)
+    month_key = first.isoformat()[:7]
+    nights = {record["date"]: record for record in records}
+    weeks = []
+    for week in calendar.Calendar(firstweekday=0).monthdayscalendar(first.year, first.month):
+        cells = []
+        for day in week:
+            if not day:
+                cells.append('<td class="diary-outside" aria-hidden="true"></td>')
+                continue
+            day_key = first.replace(day=day).isoformat()
+            record = nights.get(day_key)
+            details = '<span class="diary-missing">Not recorded</span>'
+            if record is not None:
+                metrics = night_metrics(record)
+                quality = f'Quality {record["quality"]}/10' if record["quality"] else 'Not rated'
+                details = f'<strong>{metrics["estimated_sleep_minutes"] / 60:.2f} h</strong><small>{escape(quality)}</small>'
+            cells.append(f'<td class="diary-day{ " diary-recorded" if record else ""}">'
+                         f'<time datetime="{day_key}">{day}</time>{details}</td>')
+        weeks.append('<tr>' + ''.join(cells) + '</tr>')
+    last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
+    report = summarize(records, last, last.day)
+    average = report["average_estimated_sleep_hours"]
+    summary = f'{report["recorded_nights"]} of {last.day} nights recorded. '
+    summary += f'{average:.2f} h average estimated sleep per recorded night.' if average is not None else 'No sleep estimates for this month.'
+    links = []
+    for offset, text in ((-1, '← Previous month'), (1, 'Next month →')):
+        index = (first.year - 1) * 12 + first.month - 1 + offset
+        if 0 <= index < 9999 * 12:
+            year, zero_month = divmod(index, 12)
+            key = date(year + 1, zero_month + 1, 1).isoformat()[:7]
+            links.append(f'<a href="/diary?month={key}">{text}</a>')
+    return Template(TEMPLATE_PATH.with_name("web_diary_calendar.html").read_text(encoding="utf-8")).substitute(
+        month=month_key, title=escape(first.strftime("%B %Y")), summary=escape(summary),
+        links=''.join(links), weeks=''.join(weeks))
+
+
 def render_diary(records: list[dict] | None = None, *, values: dict | None = None,
-                 error: str | None = None, saved: bool = False) -> str:
+                 error: str | None = None, saved: bool = False, month: date | None = None) -> str:
     if records is None:
         workspace = ('<section class="model-panel"><h2>Enable your local diary</h2>'
                      '<p>Start the app with <code>python -m src.web --diary data/sleep_diary.csv</code> to enable diary storage.</p>'
@@ -98,7 +137,7 @@ def render_diary(records: list[dict] | None = None, *, values: dict | None = Non
         workspace = Template(TEMPLATE_PATH.with_name("web_diary.html").read_text(encoding="utf-8")).substitute(
             **{key: escape(str(values.get(key, "")), quote=True) for key in DIARY_COLUMNS},
             checked=' checked' if values.get("replace") == "1" else '', feedback=feedback,
-            summary=escape(summary), total=len(records),
+            summary=escape(summary), total=len(records), calendar=render_diary_calendar(records, month or date.today()),
             rows=''.join(rows) or '<tr><td colspan="5">No nights recorded yet.</td></tr>')
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
@@ -514,7 +553,7 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                              content_type="text/javascript; charset=utf-8")
             elif self.path == "/":
                 self.respond(200, render_page())
-            elif self.path in ("/diary", "/diary.csv", "/diary-report"):
+            elif self.path in ("/diary", "/diary.csv", "/diary-report") or self.path.startswith("/diary?"):
                 self.diary_get()
             elif self.path == "/explore":
                 self.respond(200, render_scenarios())
@@ -623,6 +662,17 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 self.respond(200 if self.path == "/diary" else 404, render_diary())
                 return
             try:
+                query = parse_qs(urlsplit(self.path).query, keep_blank_values=True, max_num_fields=1)
+                if set(query) - {"month"}:
+                    raise ValueError("Choose a month using YYYY-MM.")
+                key = query.get("month", [date.today().isoformat()[:7]])[0]
+                if len(key) != 7:
+                    raise ValueError("Choose a month using YYYY-MM.")
+                month = date.fromisoformat(key + "-01")
+            except ValueError:
+                self.respond(400, "Choose a valid month using YYYY-MM.")
+                return
+            try:
                 with diary_lock:
                     records = load_diary(diary_path)
                 if self.path == "/diary.csv":
@@ -634,7 +684,7 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 elif self.path == "/diary-report":
                     self.respond(200, render_diary_report(summarize(records, date.today(), 30)))
                 else:
-                    self.respond(200, render_diary(records))
+                    self.respond(200, render_diary(records, month=month))
             except (OSError, ValueError, TypeError, csv.Error):
                 self.respond(503, "The diary could not be read. Check its format and file permissions.")
 
@@ -671,7 +721,7 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
             except OSError:
                 self.respond(503, "The diary could not be saved. Check its directory and file permissions.")
                 return
-            self.respond(200, render_diary(records, saved=True))
+            self.respond(200, render_diary(records, saved=True, month=date.fromisoformat(record["date"])))
 
         def batch_predict(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":

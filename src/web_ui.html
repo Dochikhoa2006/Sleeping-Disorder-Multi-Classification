@@ -102,6 +102,17 @@
     a { color: var(--accent); text-underline-offset: 3px; }
     .privacy, .limits { padding: 8px 4px; font-size: 13px; color: var(--muted); }
     footer { border-top: 1px solid var(--border); margin-top: 34px; padding-top: 20px; color: var(--muted); font-size: 12px; }
+    .diary-month-form { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; padding: 0; border: 0; }
+    .diary-month-form button { margin-top: 0; }
+    .diary-calendar { table-layout: fixed; min-width: 620px; }
+    .diary-calendar th { text-align: center; }
+    .diary-calendar td { height: 105px; padding: 10px; vertical-align: top; border: 1px solid var(--border); }
+    .diary-day time, .diary-day strong, .diary-day small { display: block; }
+    .diary-day time { font-size: 12px; margin-bottom: 8px; }
+    .diary-recorded { background: var(--success); }
+    .diary-missing { color: var(--muted); font-size: 12px; }
+    .diary-calendar small { font-size: 11px; color: var(--muted); }
+    .diary-calendar-nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; margin-top: 15px; }
     .timer-intro { max-width: 680px; margin: 28px auto; text-align: center; }
     .timer-intro h2 { font-size: clamp(28px, 4vw, 42px); }
     .timer-panel { max-width: 600px; margin: 24px auto; text-align: center; }

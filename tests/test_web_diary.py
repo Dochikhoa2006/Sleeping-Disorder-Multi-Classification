@@ -91,3 +91,37 @@ class BrowserDiaryTests(unittest.TestCase):
         self.assertEqual(self.add()[0], 403)
         self.assertEqual(self.request(path='/diary.csv')[0], 404)
         self.assertFalse(self.path.exists())
+
+    def test_month_calendar_shows_recorded_and_missing_nights(self):
+        self.add()
+        status, headers, body = self.request(path='/diary?month=2026-11')
+        self.assertEqual(status, 200)
+        self.assertIn('<caption>November 2026</caption>', body)
+        self.assertIn('1 of 30 nights recorded', body)
+        self.assertIn('7.50 h average estimated sleep per recorded night', body)
+        self.assertIn('<time datetime="2026-11-01">1</time><strong>7.50 h</strong>', body)
+        self.assertIn('href="/diary?month=2026-10"', body)
+        self.assertIn('href="/diary?month=2026-12"', body)
+        self.assertEqual(headers['Cache-Control'], 'no-store')
+
+    def test_leap_month_and_year_bounds_render_without_writing(self):
+        for month, count in (('2024-02', 29), ('2025-02', 28), ('0001-01', 31), ('9999-12', 31)):
+            with self.subTest(month=month):
+                status, _, body = self.request(path='/diary?month=' + month)
+                self.assertEqual(status, 200)
+                self.assertEqual(body.count('<time datetime="' + month), count)
+                self.assertIn(f'0 of {count} nights recorded', body)
+        self.assertFalse(self.path.exists())
+
+    def test_invalid_calendar_queries_are_rejected_without_writing(self):
+        for query in ('month=2026-13', 'month=', 'month=0000-01', 'month=202611',
+                      'month=2026-01&month=2026-02', 'unknown=2026-01'):
+            with self.subTest(query=query):
+                self.assertEqual(self.request(path='/diary?' + query)[0], 400)
+        self.assertFalse(self.path.exists())
+
+    def test_calendar_distinguishes_zero_sleep_from_missing(self):
+        self.add({**self.values, 'awake_minutes': '480'})
+        _, _, body = self.request(path='/diary?month=2026-11')
+        self.assertIn('<time datetime="2026-11-01">1</time><strong>0.00 h</strong>', body)
+        self.assertIn('<time datetime="2026-11-02">2</time><span class="diary-missing">Not recorded</span>', body)
