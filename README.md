@@ -786,3 +786,24 @@ Do not run the CLI or another server against the same diary while editing it
 in the browser. The default read-only Docker Compose setup does not enable diary
 storage. Predictions never use diary records, and diary routes never load the
 classifier. To disable browser diary access, restart without `--diary`.
+
+### Generate synthetic demo batches
+
+```bash
+python -m src.generate --rows 500 --seed 42 --output demo-patients.csv
+python -m src.generate --rows 20 --format json --edge-cases --output demo-patients.json
+python -m src.generate --rows 100 --format json | python -m src.predict --input-json - --validate-only
+```
+
+The generator creates 1–10,000 valid patient inputs, with unique `SYN-` record IDs
+and a `Data Source` column marking every record as synthetic. Choose CSV or JSON;
+omit `--output` (or use `-`) for clean standard output. File output is atomic.
+The same row count, seed, and options produce repeatable fixtures under the same
+Python version, without loading a model or reading any personal records.
+
+`--edge-cases` replaces the first two rows with valid minimum/maximum numeric
+input boundaries, requiring at least two rows. These are software test fixtures,
+not representative patients. Other fields are sampled independently and do not
+model real population relationships. No ground-truth disorder labels are
+invented: use these batches for input validation, demonstrations, and throughput
+experiments, not model training or accuracy claims.

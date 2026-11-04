@@ -39,6 +39,7 @@ jobs:
       - name: Run documented example workflows
         run: |
           python -m src.predict --input-json examples/patient.json --validate-only
+          python -m src.generate --rows 100 --format json --edge-cases | python -m src.predict --input-json - --validate-only
           python -m src.predict --input-json examples/patient.json --output-json "$RUNNER_TEMP/example-predictions.json"
           python -m src.predict --input-csv examples/patients.csv --output-csv "$RUNNER_TEMP/example-predictions.csv"
           python -m src.model_info --include-features > "$RUNNER_TEMP/example-model-info.json"
