@@ -807,3 +807,18 @@ not representative patients. Other fields are sampled independently and do not
 model real population relationships. No ground-truth disorder labels are
 invented: use these batches for input validation, demonstrations, and throughput
 experiments, not model training or accuracy claims.
+
+### Wind-down timer
+
+Open `/timer` in the local app or choose **Wind-down timer** in the navigation.
+Choose 1–60 minutes, then start, pause/resume, or reset the visual countdown. A
+progress ring and the browser tab title show time remaining. The timer accounts
+for elapsed clock time when returning from a background tab, and the status
+changes when the session completes. It has no audio alarm or notifications.
+
+The timer runs entirely in the browser with a local JavaScript file, no external
+dependencies, no history, and no server requests after loading the page. Keep the
+tab open; refreshing or closing it resets the timer. Keyboard controls, screen
+reader status messages, reduced-motion preferences, and the existing light/dark
+themes are supported. Test its countdown and control behavior with
+`node --test tests/timer.test.cjs`; Node is needed only for these development tests.

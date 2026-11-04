@@ -103,6 +103,11 @@ def render_diary(records: list[dict] | None = None, *, values: dict | None = Non
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
 
+def render_timer() -> str:
+    workspace = TEMPLATE_PATH.with_name("web_timer.html").read_text(encoding="utf-8")
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
+
+
 def render_fields(values: dict, prefix: str = "") -> str:
     fields = []
     for index, feature in enumerate(RAW_FEATURES):
@@ -461,7 +466,7 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
             # Patient input is neither persisted nor written to access logs.
             pass
 
-        def respond(self, status: int, body: str, *, content_type: str = "text/html; charset=utf-8", filename: str | None = None, allow: str | None = None) -> None:
+        def respond(self, status: int, body: str, *, content_type: str = "text/html; charset=utf-8", filename: str | None = None, allow: str | None = None, timer_script: bool = False) -> None:
             encoded = body.encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", content_type)
@@ -472,7 +477,10 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Length", str(len(encoded)))
             self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+            policy = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+            if timer_script:
+                policy += "; script-src 'self'"
+            self.send_header("Content-Security-Policy", policy)
             self.end_headers()
             self.wfile.write(encoded)
 
@@ -499,6 +507,11 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 self.respond_json(405 if self.path == "/api/predict" else 404,
                                   {"error": "Use POST for predictions." if self.path == "/api/predict" else "API route not found."},
                                   allow="POST" if self.path == "/api/predict" else None)
+            elif self.path == "/timer":
+                self.respond(200, render_timer(), timer_script=True)
+            elif self.path == "/timer.js":
+                self.respond(200, TEMPLATE_PATH.with_name("web_timer.js").read_text(encoding="utf-8"),
+                             content_type="text/javascript; charset=utf-8")
             elif self.path == "/":
                 self.respond(200, render_page())
             elif self.path in ("/diary", "/diary.csv", "/diary-report"):

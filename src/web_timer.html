@@ -1,0 +1,22 @@
+<section class="timer-intro">
+  <p class="eyebrow">MAKE A LITTLE SPACE</p>
+  <h2>A quiet moment, on your terms.</h2>
+  <p>Set aside a few minutes for reading, stretching, or simply stepping away from your next task.</p>
+</section>
+<section class="model-panel timer-panel" aria-label="Wind-down timer">
+  <div class="timer-dial">
+    <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+      <circle class="timer-track" cx="60" cy="60" r="52"></circle>
+      <circle id="timer-progress" cx="60" cy="60" r="52" pathLength="100"></circle>
+    </svg>
+    <div class="timer-face"><span id="timer-countdown" aria-label="Time remaining">05:00</span><span class="eyebrow">TIME REMAINING</span></div>
+  </div>
+  <p id="timer-status" role="status" aria-live="polite">Choose a duration, then start when you are ready.</p>
+  <label class="timer-duration" for="timer-minutes">Duration · minutes
+    <input id="timer-minutes" type="number" min="1" max="60" step="1" value="5" required>
+  </label>
+  <div class="timer-actions"><button id="timer-toggle" type="button">Start timer</button><button id="timer-reset" class="secondary-button" type="button">Reset</button></div>
+  <noscript><p class="feedback error">Enable JavaScript to use the countdown.</p></noscript>
+</section>
+<p class="privacy">The countdown runs in this browser tab. It saves no history and sends no timer data to the server. Keep the tab open; the display catches up when you return from another tab. It is a quiet visual timer, with no alarm or notification.</p>
+<script src="/timer.js" defer></script>

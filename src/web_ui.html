@@ -102,6 +102,20 @@
     a { color: var(--accent); text-underline-offset: 3px; }
     .privacy, .limits { padding: 8px 4px; font-size: 13px; color: var(--muted); }
     footer { border-top: 1px solid var(--border); margin-top: 34px; padding-top: 20px; color: var(--muted); font-size: 12px; }
+    .timer-intro { max-width: 680px; margin: 28px auto; text-align: center; }
+    .timer-intro h2 { font-size: clamp(28px, 4vw, 42px); }
+    .timer-panel { max-width: 600px; margin: 24px auto; text-align: center; }
+    .timer-dial { position: relative; width: min(100%, 320px); margin: 8px auto 20px; }
+    .timer-dial svg { width: 100%; display: block; transform: rotate(-90deg); }
+    .timer-dial circle { fill: none; stroke-width: 3; }
+    .timer-track { stroke: var(--border); }
+    #timer-progress { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 0; transition: stroke-dashoffset .2s linear; }
+    .timer-face { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    #timer-countdown { font-size: clamp(44px, 10vw, 70px); font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.3; }
+    .timer-duration { display: block; max-width: 180px; margin: 24px auto 0; text-align: left; }
+    .timer-duration input:disabled { opacity: .65; }
+    .timer-actions button { min-width: 140px; }
+    @media (prefers-reduced-motion: reduce) { #timer-progress { transition: none; } }
     @media (max-width: 760px) { main { padding: 28px 18px; } .layout, .profile-grid { grid-template-columns: 1fr; } form { padding: 22px; } fieldset + fieldset { border-top: 1px solid var(--border); padding-top: 24px; } }
     @media (max-width: 460px) { .fields, .batch-filters { grid-template-columns: 1fr; } .secondary-button { margin-left: 0; } }
     @media (max-width: 760px) { .model-heading { flex-direction: column; } .model-stats { grid-template-columns: 1fr; } .model-details { grid-template-columns: 1fr; gap: 5px; } .model-details dd { margin-bottom: 12px; } }
@@ -114,7 +128,7 @@
       <h1>A closer look at<br>sleep &amp; lifestyle.</h1>
       <p>Explore how a trained model classifies sleep and lifestyle details as Healthy, Insomnia, or Sleep Apnea.</p>
     </header>
-    <nav aria-label="Prediction tools"><a href="/">Single patient &amp; CSV</a><a href="/compare">Compare profiles</a><a href="/model">Model dashboard</a><a href="/evaluate">Evaluate labeled data</a><a href="/guide">Input guide</a><a href="/explore">Scenario explorer</a><a href="/diary">Sleep diary</a></nav>
+    <nav aria-label="Prediction tools"><a href="/">Single patient &amp; CSV</a><a href="/compare">Compare profiles</a><a href="/model">Model dashboard</a><a href="/evaluate">Evaluate labeled data</a><a href="/guide">Input guide</a><a href="/explore">Scenario explorer</a><a href="/diary">Sleep diary</a><a href="/timer">Wind-down timer</a></nav>
     <div class="$layout_class">$workspace</div>
     <footer>Educational exploration only. Predictions are not medical advice or a diagnosis.</footer>
   </main>

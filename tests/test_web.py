@@ -28,6 +28,23 @@ class WebTests(unittest.TestCase):
         with make_server(port=0) as server:
             self.assertEqual(server.server_address[0], "127.0.0.1")
 
+    def test_browser_timer_serves_script_with_scoped_content_policy(self):
+        with patch("src.predict.joblib.load") as load:
+            status, headers, body = self.request("GET", "/timer")
+        load.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertIn('src="/timer.js" defer', body)
+        self.assertIn('role="status"', body)
+        self.assertIn("script-src 'self'", headers["Content-Security-Policy"])
+        self.assertNotIn("script-src", self.request("GET", "/")[1]["Content-Security-Policy"])
+        status, headers, script = self.request("GET", "/timer.js")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
+        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        self.assertIn('class Countdown', script)
+        self.assertEqual(self.request("GET", "/timer.js", headers={"Origin": "https://example.com"})[0], 403)
+        self.assertEqual(self.request("POST", "/timer")[0], 404)
+
     def test_scenario_explorer_renders_and_predicts_one_batch(self):
         self.assertEqual(self.request("GET", "/explore")[0], 200)
         values = {**DEFAULT_PATIENT, "scenario_field": "Sleep Duration",
