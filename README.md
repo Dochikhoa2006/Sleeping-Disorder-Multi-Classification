@@ -855,3 +855,25 @@ changes them. Re-import/update behavior depends on your calendar app. Exporting
 never modifies the diary; CLI output is atomic and cannot overwrite its source.
 Calendar files contain diary information. Importing one into a cloud calendar
 may upload that information through the calendar app.
+
+### Restore or merge a diary backup
+
+Use **Restore a diary CSV backup** on the browser diary page, or run:
+
+```bash
+python -m src.diary --file data/sleep_diary.csv import --input-csv backup.csv
+```
+
+New nights are merged into the local diary. Dates absent from the backup remain
+untouched. By default, any existing date rejects the entire import. To explicitly
+replace matching dates, use the browser's **Import and replace matching dates**
+button or add `--replace` to the CLI command. The result reports added, replaced,
+and total counts. This accepts the same CSV format produced by diary downloads,
+including UTF-8 files with a byte order mark; browser uploads are limited to 2 MiB
+including overhead. Patient prediction CSVs use a different format and are rejected.
+
+Every imported row must be valid, dates must be unique within the backup, and the
+backup must contain at least one night. Validation and conflict checking complete
+before an atomic write, so errors leave the diary untouched. Browser restoration
+requires diary storage to be enabled. It never loads the classifier. The CLI
+rejects using the destination diary itself as the backup input.

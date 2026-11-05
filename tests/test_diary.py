@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from src.diary import add_night, load_diary, main, night_metrics, summarize, render_report
+from src.diary import add_night, load_diary, main, night_metrics, summarize, render_report, merge_nights, read_diary
 
 
 class DiaryTests(unittest.TestCase):
@@ -119,3 +119,41 @@ class DiaryTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, 'differ'):
                     main()
             self.assertEqual(diary.read_bytes(), before)
+
+    def test_merge_adds_new_dates_preserves_existing_and_requires_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'diary.csv'
+            add_night(path, self.night())
+            before = path.read_bytes()
+            incoming = [self.night(quality='2'), self.night(date='2026-11-02')]
+            with self.assertRaisesRegex(ValueError, '--replace'):
+                merge_nights(path, incoming)
+            self.assertEqual(path.read_bytes(), before)
+            result = merge_nights(path, incoming, replace=True)
+            self.assertEqual(result, {'added': 1, 'replaced': 1, 'total': 2})
+            self.assertEqual(load_diary(path)[0]['quality'], '2')
+            self.assertEqual(merge_nights(path, [self.night(date='2026-11-03')])['total'], 3)
+
+    def test_invalid_or_duplicate_backup_does_not_partially_merge(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'diary.csv'
+            add_night(path, self.night())
+            before = path.read_bytes()
+            for incoming in ([], [self.night(date='2026-11-02'), self.night(quality='99')],
+                             [self.night(date='2026-11-02')] * 2):
+                with self.subTest(incoming=incoming), self.assertRaises(ValueError):
+                    merge_nights(path, incoming, replace=True)
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_import_cli_restores_backup_and_rejects_same_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backup, target = root / 'backup.csv', root / 'restored.csv'
+            add_night(backup, self.night())
+            with patch('sys.argv', ['diary', '--file', str(target), 'import', '--input-csv', str(backup)]), redirect_stdout(StringIO()) as output:
+                main()
+            self.assertEqual(json.loads(output.getvalue()), {'added': 1, 'replaced': 0, 'total': 1})
+            self.assertEqual(load_diary(target), load_diary(backup))
+            with patch('sys.argv', ['diary', '--file', str(backup), 'import', '--input-csv', str(backup), '--replace']):
+                with self.assertRaisesRegex(SystemExit, 'differ'):
+                    main()

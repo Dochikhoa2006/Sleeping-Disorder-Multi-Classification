@@ -91,6 +91,7 @@ class BrowserDiaryTests(unittest.TestCase):
         self.assertEqual(self.add()[0], 403)
         self.assertEqual(self.request(path='/diary.csv')[0], 404)
         self.assertEqual(self.request(path='/diary.ics')[0], 404)
+        self.assertEqual(self.request('POST', path='/diary-import')[0], 403)
         self.assertFalse(self.path.exists())
 
     def test_month_calendar_shows_recorded_and_missing_nights(self):
@@ -138,3 +139,41 @@ class BrowserDiaryTests(unittest.TestCase):
         self.assertIn('DTSTART:20261101T230000', body)
         self.assertIn('DTEND:20261102T070000', body)
         self.assertIn('BEGIN:VCALENDAR', body)
+
+    def import_backup(self, rows, replace=False):
+        source = StringIO(newline='')
+        writer = csv.DictWriter(source, fieldnames=list(self.values))
+        writer.writeheader()
+        writer.writerows(rows)
+        boundary = 'DiaryBackupBoundary'
+        payload = (f'--{boundary}\r\nContent-Disposition: form-data; name="diary"; filename="backup.csv"\r\n'
+                   'Content-Type: text/csv\r\n\r\n').encode() + source.getvalue().encode('utf-8-sig') + f'\r\n--{boundary}--\r\n'.encode()
+        return self.request('POST', path='/diary-import-replace' if replace else '/diary-import', body=payload,
+                            headers={'Content-Type': f'multipart/form-data; boundary={boundary}'})
+
+    def test_browser_import_restores_bom_backup_without_model_loading(self):
+        with patch('src.predict.joblib.load') as load:
+            status, _, body = self.import_backup([self.values, {**self.values, 'date': '2026-11-02'}])
+        load.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertIn('Imported 2 new nights', body)
+        self.assertEqual(len(load_diary(self.path)), 2)
+
+    def test_browser_import_conflicts_are_atomic_and_replacement_is_explicit(self):
+        self.add()
+        original = self.path.read_bytes()
+        incoming = [{**self.values, 'quality': '3'}, {**self.values, 'date': '2026-11-02'}]
+        self.assertEqual(self.import_backup(incoming)[0], 400)
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(self.import_backup(incoming, replace=True)[0], 200)
+        self.assertEqual(load_diary(self.path)[0]['quality'], '3')
+        self.assertEqual(len(load_diary(self.path)), 2)
+
+    def test_invalid_backup_never_partially_merges(self):
+        self.add()
+        original = self.path.read_bytes()
+        for rows in ([], [self.values, self.values],
+                     [{**self.values, 'date': '2026-11-02'}, {**self.values, 'quality': '99'}]):
+            with self.subTest(rows=rows):
+                self.assertEqual(self.import_backup(rows, replace=True)[0], 400)
+                self.assertEqual(self.path.read_bytes(), original)

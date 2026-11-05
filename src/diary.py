@@ -9,6 +9,7 @@ import json
 from html import escape
 from string import Template
 from pathlib import Path
+from typing import TextIO
 import re
 
 from src.output import atomic_text_output
@@ -51,22 +52,28 @@ def load_diary(path: Path) -> list[dict]:
     if not path.exists():
         return []
     with path.open(encoding="utf-8-sig", newline="") as source:
-        reader = csv.DictReader(source, strict=True)
-        if reader.fieldnames != COLUMNS:
-            raise ValueError("Not a sleep diary: expected columns " + ", ".join(COLUMNS))
-        records = []
-        seen = set()
-        for index, record in enumerate(reader, start=2):
-            if None in record or any(value is None for value in record.values()):
-                raise ValueError(f"Diary row {index} has the wrong number of fields.")
-            try:
-                night_metrics(record)
-                if record["date"] in seen:
-                    raise ValueError("Duplicate night date.")
-            except (ValueError, TypeError) as error:
-                raise ValueError(f"Diary row {index}: {error}") from error
-            seen.add(record["date"])
-            records.append(record)
+        return read_diary(source)
+
+
+def read_diary(source: TextIO) -> list[dict]:
+    """Read and validate a complete diary CSV, including duplicate dates."""
+    reader = csv.DictReader(source, strict=True)
+    if reader.fieldnames != COLUMNS:
+        raise ValueError("Not a sleep diary: expected columns " + ", ".join(COLUMNS))
+    records = []
+    seen = set()
+    for index, record in enumerate(reader, start=2):
+        if None in record or any(value is None for value in record.values()):
+            raise ValueError(f"Diary row {index} has the wrong number of fields.")
+        try:
+            night_metrics(record)
+            if record["date"] in seen:
+                raise ValueError("Duplicate night date.")
+        except (ValueError, TypeError) as error:
+            raise ValueError(f"Diary row {index}: {error}") from error
+        seen.add(record["date"])
+        records.append(record)
+
     return records
 
 
@@ -80,6 +87,30 @@ def add_night(path: Path, record: dict, *, replace: bool = False) -> None:
         writer = csv.DictWriter(output, fieldnames=COLUMNS)
         writer.writeheader()
         writer.writerows(sorted(records, key=lambda row: row["date"]))
+
+
+def merge_nights(path: Path, incoming: list[dict], *, replace: bool = False) -> dict:
+    """Validate and merge a backup in one atomic write; reject conflicts by default."""
+    if not incoming:
+        raise ValueError("The backup must contain at least one night.")
+    additions = {}
+    for record in incoming:
+        if set(record) != set(COLUMNS):
+            raise ValueError("Imported records must contain exactly the diary columns.")
+        night_metrics(record)
+        if record["date"] in additions:
+            raise ValueError("Duplicate night date in backup.")
+        additions[record["date"]] = record
+    existing = {record["date"]: record for record in load_diary(path)}
+    conflicts = set(existing) & set(additions)
+    if conflicts and not replace:
+        raise ValueError(f"{len(conflicts)} date(s) already exist. Choose replacement explicitly or use --replace.")
+    merged = {**existing, **additions}
+    with atomic_text_output(path, newline="") as output:
+        writer = csv.DictWriter(output, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(merged[key] for key in sorted(merged))
+    return {"added": len(additions) - len(conflicts), "replaced": len(conflicts), "total": len(merged)}
 
 
 def summarize(records: list[dict], end: date, days: int = 7) -> dict:
@@ -147,6 +178,9 @@ def main() -> None:
     summary.add_argument("--html", type=Path, help="Also save a printable, self-contained HTML chart.")
     export = commands.add_parser("export-calendar", help="Save diary nights as an iCalendar .ics file.")
     export.add_argument("--output", type=Path, required=True)
+    restore = commands.add_parser("import", help="Merge a diary CSV backup into the local diary.")
+    restore.add_argument("--input-csv", type=Path, required=True)
+    restore.add_argument("--replace", action="store_true", help="Replace matching dates; otherwise any conflict rejects the import.")
     args = parser.parse_args()
     try:
         if args.command == "add":
@@ -155,6 +189,13 @@ def main() -> None:
                       "quality": str(args.quality) if args.quality is not None else ""}
             add_night(args.file, record, replace=args.replace)
             print(f"Saved night {args.date} to {args.file}")
+        elif args.command == "import":
+            if args.input_csv.resolve() == args.file.resolve():
+                raise ValueError("Backup input must differ from the destination diary.")
+            with args.input_csv.open(encoding="utf-8-sig", newline="") as source:
+                incoming = read_diary(source)
+            result = merge_nights(args.file, incoming, replace=args.replace)
+            print(json.dumps(result, indent=2))
         elif args.command == "export-calendar":
             from src.calendar_export import render_calendar
             if args.output.resolve() == args.file.resolve():

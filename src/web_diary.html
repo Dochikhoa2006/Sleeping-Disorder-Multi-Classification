@@ -4,6 +4,16 @@
 </section>
 $feedback
 $calendar
+<details class="profile-tools">
+  <summary>Restore a diary CSV backup</summary>
+  <form action="/diary-import" method="post" enctype="multipart/form-data">
+    <p class="hint">Import a previously downloaded diary CSV. Every row is validated before any changes are saved. New dates are merged; dates missing from the backup stay in your diary.</p>
+    <label for="diary-backup">Diary CSV · up to 2 MiB including upload overhead<input id="diary-backup" type="file" name="diary" accept=".csv,text/csv" required></label>
+    <button type="submit">Import new nights →</button>
+    <button class="secondary-button" type="submit" formaction="/diary-import-replace">Import and replace matching dates</button>
+    <p class="hint">The first button rejects the whole import if any date already exists. The second explicitly replaces matching dates with the backup's values.</p>
+  </form>
+</details>
 <form action="/diary" method="post">
   <h2>Record or update a night</h2>
   <div class="fields">

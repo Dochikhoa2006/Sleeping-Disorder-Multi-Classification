@@ -28,7 +28,7 @@ from src.preprocessing import RAW_FEATURES
 from src.model_info import inspect_model
 from src.evaluation import evaluate_bytes
 from src.calendar_export import render_calendar
-from src.diary import COLUMNS as DIARY_COLUMNS, add_night, load_diary, night_metrics, summarize, render_report as render_diary_report
+from src.diary import COLUMNS as DIARY_COLUMNS, add_night, load_diary, read_diary, merge_nights, night_metrics, summarize, render_report as render_diary_report
 
 TEMPLATE_PATH = Path(__file__).with_name("web_ui.html")
 EXAMPLE_CSV_PATH = Path(__file__).resolve().parents[1] / "examples" / "patients.csv"
@@ -114,7 +114,7 @@ def render_diary_calendar(records: list[dict], month: date) -> str:
 
 
 def render_diary(records: list[dict] | None = None, *, values: dict | None = None,
-                 error: str | None = None, saved: bool = False, month: date | None = None) -> str:
+                 error: str | None = None, saved: bool = False, notice: str | None = None, month: date | None = None) -> str:
     if records is None:
         workspace = ('<section class="model-panel"><h2>Enable your local diary</h2>'
                      '<p>Start the app with <code>python -m src.web --diary data/sleep_diary.csv</code> to enable diary storage.</p>'
@@ -134,7 +134,7 @@ def render_diary(records: list[dict] | None = None, *, values: dict | None = Non
         summary = f'{report["recorded_nights"]} recorded nights in the last 7 days; '
         summary += f'{average:.2f} h average estimated sleep.' if average is not None else 'no sleep estimates yet.'
         feedback = (f'<p class="feedback error" role="alert">{escape(error)}</p>' if error else
-                    '<p class="feedback result" role="status">Night saved to your local diary.</p>' if saved else '')
+                    f'<p class="feedback result" role="status">{escape(notice or "Night saved to your local diary.")}</p>' if saved or notice else '')
         workspace = Template(TEMPLATE_PATH.with_name("web_diary.html").read_text(encoding="utf-8")).substitute(
             **{key: escape(str(values.get(key, "")), quote=True) for key in DIARY_COLUMNS},
             checked=' checked' if values.get("replace") == "1" else '', feedback=feedback,
@@ -600,6 +600,9 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                                       {"error": "Use GET for the health check." if self.path == "/api/health" else "API route not found."},
                                       allow="GET" if self.path == "/api/health" else None)
                 return
+            if self.path in ("/diary-import", "/diary-import-replace"):
+                self.diary_import()
+                return
             if self.path == "/diary":
                 self.diary_add()
                 return
@@ -726,6 +729,38 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 self.respond(503, "The diary could not be saved. Check its directory and file permissions.")
                 return
             self.respond(200, render_diary(records, saved=True, month=date.fromisoformat(record["date"])))
+
+        def diary_import(self) -> None:
+            if diary_path is None:
+                self.respond(403, render_diary())
+                return
+            if self.headers.get_content_type() != "multipart/form-data":
+                self.respond(415, "Choose a diary backup using the import form.")
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= MAX_UPLOAD_BYTES:
+                    self.respond(413, "Choose a diary CSV smaller than 2 MiB, including upload overhead.")
+                    return
+                payload = uploaded_file(self.headers.get("Content-Type", ""), self.rfile.read(length), "diary")
+                incoming = read_diary(StringIO(payload.decode("utf-8-sig"), newline=""))
+                with diary_lock:
+                    result = merge_nights(diary_path, incoming, replace=self.path == "/diary-import-replace")
+                    records = load_diary(diary_path)
+            except (ValueError, TypeError, UnicodeError, csv.Error) as error:
+                try:
+                    with diary_lock:
+                        records = load_diary(diary_path)
+                except (OSError, ValueError, TypeError, csv.Error):
+                    self.respond(503, "The existing diary could not be read. No import was saved.")
+                    return
+                self.respond(400, render_diary(records, error=str(error)))
+                return
+            except OSError:
+                self.respond(503, "The diary could not be imported. Check its directory and file permissions.")
+                return
+            notice = f'Imported {result["added"]} new nights and replaced {result["replaced"]} existing nights. {result["total"]} entries in the diary.'
+            self.respond(200, render_diary(records, notice=notice))
 
         def batch_predict(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":
