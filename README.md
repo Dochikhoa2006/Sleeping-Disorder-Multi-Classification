@@ -948,3 +948,26 @@ This intentionally removes repeated input profiles, even if they have different
 record IDs or represent different people/nights. Use it only when that matches
 your cleaning goal. It accepts patient input CSVs; prediction exports containing
 an existing `Predicted Sleep Disorder` column are rejected.
+
+### Diagnose a local installation
+
+```bash
+python -m src.doctor
+python -m src.doctor --smoke-test --json
+```
+
+The diagnostics command checks Python compatibility, installed versions against
+`requirements.txt`, required templates/scripts/examples, and whether the model
+file is readable and non-empty. It reports the artifact hash without loading it.
+The command itself uses only the standard library, so it can explain missing ML
+dependencies instead of failing while importing them. Exact version mismatches
+are reported even if a different version might otherwise run successfully.
+
+Add `--smoke-test` to deserialize the trusted model and predict the included
+synthetic example after prerequisite checks pass. This verifies runtime inference;
+a readable file alone does not prove a model works. Use `--model /path/to/model`
+to check another trusted artifact. Diagnostics do not install packages, modify
+files, bind a port, or read a personal diary. `--json` emits a complete structured
+report; exit status is 0 when all requested checks pass and 1 otherwise. Prediction
+checks are skipped if a prerequisite fails, and inference errors are captured in
+the report. Without `--smoke-test`, no joblib artifact is deserialized.

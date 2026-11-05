@@ -40,6 +40,7 @@ jobs:
 
       - name: Run documented example workflows
         run: |
+          python -m src.doctor --smoke-test --json > "$RUNNER_TEMP/installation-check.json"
           python -m src.predict --input-json examples/patient.json --validate-only
           python -m src.generate --rows 100 --format json --edge-cases | python -m src.predict --input-json - --validate-only
           python -m src.predict --input-json examples/patient.json --output-json "$RUNNER_TEMP/example-predictions.json"
