@@ -22,11 +22,12 @@ from urllib.parse import parse_qs, urlsplit
 
 from src.predict import (
     CSV_NUMERIC_FEATURES, DEFAULT_MODEL_PATH, PREDICTION_COLUMN,
-    predict, predict_many, read_patient_csv, read_patient_json, validate_patient,
+    predict, predict_many, read_patient_csv, read_patient_json, read_prediction_csv, validate_patient,
 )
 from src.preprocessing import RAW_FEATURES
 from src.model_info import inspect_model
 from src.evaluation import evaluate_bytes
+from src.prediction_diff import compare_prediction_exports, ID_COLUMN
 from src.calendar_export import render_calendar
 from src.diary import COLUMNS as DIARY_COLUMNS, add_night, load_diary, read_diary, merge_nights, night_metrics, summarize, render_report as render_diary_report
 
@@ -341,22 +342,58 @@ def render_patient_report(values: dict, result: str) -> str:
     )
 
 
-def uploaded_file(content_type: str, body: bytes, field_name: str) -> bytes:
+def uploaded_files(content_type: str, body: bytes, field_names: tuple[str, ...]) -> dict[str, bytes]:
     message = BytesParser(policy=policy.default).parsebytes(
         f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("ascii") + body
     )
     if not message.is_multipart() or any(part.defects for part in message.walk()):
         raise ValueError("The upload is incomplete or malformed. Choose the file again.")
     parts = list(message.iter_parts())
-    if len(parts) != 1 or parts[0].get_param("name", header="content-disposition") != field_name:
-        raise ValueError("Upload exactly one file using the matching upload form.")
-    upload = parts[0]
-    if not upload.get_filename():
-        raise ValueError("Choose a file to upload.")
-    payload = upload.get_payload(decode=True)
-    if payload is None:
-        raise ValueError("The uploaded file is empty or malformed.")
-    return payload
+    names = [part.get_param("name", header="content-disposition") for part in parts]
+    if len(parts) != len(field_names) or set(names) != set(field_names):
+        raise ValueError("Upload exactly the requested files using the matching upload form.")
+    uploads = {}
+    for name, part in zip(names, parts, strict=True):
+        if not part.get_filename():
+            raise ValueError("Choose a file to upload.")
+        payload = part.get_payload(decode=True)
+        if payload is None:
+            raise ValueError("The uploaded file is empty or malformed.")
+        uploads[name] = payload
+    return uploads
+
+
+def uploaded_file(content_type: str, body: bytes, field_name: str) -> bytes:
+    return uploaded_files(content_type, body, (field_name,))[field_name]
+
+
+def render_batch_comparison(report: dict | None = None, *, error: str | None = None) -> str:
+    feedback = f'<section class="feedback error" role="alert"><h2>Check your exports</h2><p>{escape(error)}</p></section>' if error else ''
+    results = ''
+    if report is not None:
+        counts = report["counts"]
+        labels = {"unchanged": "Unchanged", "prediction_changed": "Prediction changed · same inputs",
+                  "inputs_changed": "Input profile changed", "added": "Added IDs", "removed": "Removed IDs"}
+        cards = ''.join(f'<article><p>{escape(label)}</p><strong>{counts[key]}</strong></article>' for key, label in labels.items())
+        changes = [row for row in report["records"] if row["Status"] != "unchanged"]
+        columns = [ID_COLUMN, "Status", "Baseline Prediction", "Candidate Prediction"]
+        rows = ''.join('<tr>' + ''.join(f'<td>{escape(row[column])}</td>' for column in columns) + '</tr>'
+                       for row in changes[:PREVIEW_ROWS])
+        output = StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(report["records"])
+        download = base64.b64encode(output.getvalue().encode("utf-8")).decode("ascii")
+        results = (f'<section class="model-stats" aria-label="Comparison counts">{cards}</section>'
+                   '<section class="model-panel"><h2>Batch differences</h2>'
+                   f'<p>{report["baseline_rows"]} baseline records; {report["candidate_rows"]} candidate records. '
+                   f'Showing {min(len(changes), PREVIEW_ROWS)} of {len(changes)} differences.</p>'
+                   f'<a class="download-link" href="data:text/csv;charset=utf-8;base64,{download}" download="prediction-comparison.csv">Download full comparison ↓</a>'
+                   '<div class="table-scroll"><table><caption>Changed, added, and removed records</caption><thead><tr>'
+                   + ''.join(f'<th scope="col">{escape(column)}</th>' for column in columns)
+                   + '</tr></thead><tbody>' + (rows or '<tr><td colspan="4">No differences found.</td></tr>') + '</tbody></table></div></section>')
+    workspace = Template(TEMPLATE_PATH.with_name("web_batch_comparison.html").read_text(encoding="utf-8")).substitute(feedback=feedback, results=results)
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
 
 def render_batch_results(columns: list[str], rows: list[dict], predictions: list[str], csv_content: str, *, query: str = "", selected_class: str = "", sort_by: str = "", direction: str = "asc") -> str:
@@ -414,23 +451,7 @@ def render_batch_results(columns: list[str], rows: list[dict], predictions: list
 
 def read_preview_results(encoded: str) -> tuple[list[str], list[dict], list[str], str]:
     content = base64.b64decode(encoded, validate=True).decode("utf-8")
-    reader = csv.reader(StringIO(content, newline=""), strict=True)
-    headers = next(reader, [])
-    if len(headers) != len(set(headers)) or PREDICTION_COLUMN not in headers:
-        raise ValueError("The results are malformed. Upload the original CSV again.")
-    prediction_index = headers.index(PREDICTION_COLUMN)
-    columns = [name for name in headers if name != PREDICTION_COLUMN]
-    source = StringIO(newline="")
-    writer = csv.writer(source)
-    writer.writerow(columns)
-    predictions = []
-    for values in reader:
-        if len(values) != len(headers) or not values[prediction_index]:
-            raise ValueError("The results contain an incomplete row.")
-        predictions.append(values[prediction_index])
-        writer.writerow(values[:prediction_index] + values[prediction_index + 1:])
-    source.seek(0)
-    columns, rows, _ = read_patient_csv(source)
+    columns, rows, predictions = read_prediction_csv(StringIO(content, newline=""))
     return columns, rows, predictions, content
 
 
@@ -565,6 +586,8 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 csv.writer(output).writerow(RAW_FEATURES)
                 self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8",
                              filename="patient-template.csv")
+            elif self.path == "/compare-batches":
+                self.respond(200, render_batch_comparison())
             elif self.path == "/compare":
                 self.respond(200, render_comparison())
             elif self.path == "/evaluate":
@@ -599,6 +622,9 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                     self.respond_json(405 if self.path == "/api/health" else 404,
                                       {"error": "Use GET for the health check." if self.path == "/api/health" else "API route not found."},
                                       allow="GET" if self.path == "/api/health" else None)
+                return
+            if self.path == "/compare-batches":
+                self.compare_batches()
                 return
             if self.path in ("/diary-import", "/diary-import-replace"):
                 self.diary_import()
@@ -761,6 +787,22 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 return
             notice = f'Imported {result["added"]} new nights and replaced {result["replaced"]} existing nights. {result["total"]} entries in the diary.'
             self.respond(200, render_diary(records, notice=notice))
+
+        def compare_batches(self) -> None:
+            if self.headers.get_content_type() != "multipart/form-data":
+                self.respond(415, render_batch_comparison(error="Choose both CSV exports using the comparison form."))
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= MAX_UPLOAD_BYTES:
+                    self.respond(413, render_batch_comparison(error="Choose exports smaller than 2 MiB combined, including upload overhead."))
+                    return
+                files = uploaded_files(self.headers.get("Content-Type", ""), self.rfile.read(length), ("baseline", "candidate"))
+                report = compare_prediction_exports(files["baseline"], files["candidate"])
+            except (ValueError, TypeError, UnicodeError, csv.Error) as error:
+                self.respond(400, render_batch_comparison(error=str(error)))
+                return
+            self.respond(200, render_batch_comparison(report))
 
         def batch_predict(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":

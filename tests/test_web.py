@@ -28,6 +28,52 @@ class WebTests(unittest.TestCase):
         with make_server(port=0) as server:
             self.assertEqual(server.server_address[0], "127.0.0.1")
 
+    def comparison_upload(self, baseline, candidate):
+        boundary = "BatchComparisonBoundary"
+        body = b""
+        for name, source in (("baseline", baseline), ("candidate", candidate)):
+            body += (f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; filename="export.csv"\r\n'
+                     'Content-Type: text/csv\r\n\r\n').encode() + source + b"\r\n"
+        body += f"--{boundary}--\r\n".encode()
+        return self.request("POST", "/compare-batches", body, {"Content-Type": f"multipart/form-data; boundary={boundary}"})
+
+    def prediction_export(self, count, label):
+        output = StringIO(newline="")
+        columns = [*DEFAULT_PATIENT, "Record ID", PREDICTION_COLUMN]
+        writer = csv.DictWriter(output, fieldnames=columns)
+        writer.writeheader()
+        for index in range(count):
+            writer.writerow({**DEFAULT_PATIENT, "Record ID": f"patient-{index}", PREDICTION_COLUMN: label})
+        return output.getvalue().encode("utf-8-sig")
+
+    def test_batch_comparison_previews_100_differences_and_downloads_all(self):
+        with patch("src.predict.joblib.load") as load:
+            status, _, body = self.comparison_upload(self.prediction_export(105, "Healthy"),
+                                                      self.prediction_export(105, "Insomnia"))
+        load.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertIn("Showing 100 of 105 differences", body)
+        encoded = re.search(r'data:text/csv;charset=utf-8;base64,([^"\s]+)', body).group(1)
+        rows = list(csv.DictReader(StringIO(base64.b64decode(encoded).decode())))
+        self.assertEqual(len(rows), 105)
+        self.assertTrue(all(row["Status"] == "prediction_changed" for row in rows))
+        self.assertEqual(rows[-1]["Record ID"], "patient-104")
+
+    def test_batch_comparison_no_changes_and_html_escaping(self):
+        source = self.prediction_export(1, "Healthy").replace(b"patient-0", b"<script>alert(1)</script>")
+        status, _, body = self.comparison_upload(source, source.replace(b"Healthy", b"Insomnia"))
+        self.assertEqual(status, 200)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", body)
+        self.assertNotIn("<script>alert(1)</script>", body)
+        self.assertIn("No differences found", self.comparison_upload(source, source)[2])
+
+    def test_batch_comparison_form_limits_and_malformed_uploads(self):
+        self.assertEqual(self.request("GET", "/compare-batches")[0], 200)
+        self.assertEqual(self.request("POST", "/compare-batches", b"x", {"Content-Type": "text/csv"})[0], 415)
+        self.assertEqual(self.request("POST", "/compare-batches", b"x", {
+            "Content-Type": "multipart/form-data; boundary=x", "Content-Length": str(MAX_UPLOAD_BYTES + 1)})[0], 413)
+        self.assertEqual(self.comparison_upload(b"wrong,header\n", self.prediction_export(1, "Healthy"))[0], 400)
+
     def test_browser_timer_serves_script_with_scoped_content_policy(self):
         with patch("src.predict.joblib.load") as load:
             status, headers, body = self.request("GET", "/timer")

@@ -1,0 +1,16 @@
+<section class="comparison-intro">
+  <h2>Compare two prediction exports</h2>
+  <p>Match records by their exact <code>Record ID</code>, regardless of row order. Find changed predictions, changed inputs, and IDs added or removed between batches.</p>
+</section>
+$feedback
+<form action="/compare-batches" method="post" enctype="multipart/form-data">
+  <div class="fields">
+    <label for="baseline-export">Baseline prediction CSV<input id="baseline-export" type="file" name="baseline" accept=".csv,text/csv" required></label>
+    <label for="candidate-export">Candidate prediction CSV<input id="candidate-export" type="file" name="candidate" accept=".csv,text/csv" required></label>
+  </div>
+  <p class="hint">Use full prediction exports containing the 11 patient fields, a unique non-empty Record ID, and Predicted Sleep Disorder. Both files together must be under 2 MiB including upload overhead.</p>
+  <button type="submit">Compare batches →</button>
+</form>
+$results
+<p class="privacy">Comparison runs locally without loading a model or storing either upload. The download includes all IDs, including unchanged records, in baseline order followed by new candidate IDs.</p>
+<p class="limits">Changed input profiles are reported separately from prediction changes on equivalent inputs. Comparison uses the same input normalization as the model and ignores extra columns. This compares exported results; it does not measure accuracy or identify the cause of a change.</p>

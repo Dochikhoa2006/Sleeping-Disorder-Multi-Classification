@@ -877,3 +877,24 @@ backup must contain at least one night. Validation and conflict checking complet
 before an atomic write, so errors leave the diary untouched. Browser restoration
 requires diary storage to be enabled. It never loads the classifier. The CLI
 rejects using the destination diary itself as the backup input.
+
+### Compare two exported prediction batches
+
+Open `/compare-batches` or choose **Compare batches** in the local app. Upload a
+baseline and candidate prediction CSV, each containing a unique non-empty
+`Record ID`, all 11 patient fields, and `Predicted Sleep Disorder`. The combined
+upload limit is 2 MiB including multipart overhead. Matching uses exact record
+IDs, so reordering rows does not produce false changes.
+
+The report separates unchanged records, prediction changes on equivalent inputs,
+changed input profiles, added IDs, and removed IDs. Input equivalence uses the
+model's feature normalization, including BMI aliases, numeric representations,
+and trimmed categories; unused extra columns are ignored. If both the inputs and
+prediction change, the record is classified as `inputs_changed`, with both
+predictions still shown. This avoids presenting a changed patient profile as a
+model-only regression.
+
+The page shows up to 100 differences. Download the complete comparison, including
+unchanged IDs, in baseline order followed by candidate-only IDs. The server does
+not store uploads or load a model. These are comparisons of exported results,
+not accuracy measurements or proof of what caused a difference.

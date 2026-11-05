@@ -111,6 +111,27 @@ def parse_csv_patient(columns: list[str], values: list[str], row_number: int) ->
     return original, patient
 
 
+def read_prediction_csv(input_file: TextIO) -> tuple[list[str], list[dict], list[str]]:
+    """Validate exported prediction rows while retaining patient columns."""
+    reader = csv.reader(input_file, strict=True)
+    headers = next(reader, [])
+    if len(headers) != len(set(headers)) or PREDICTION_COLUMN not in headers:
+        raise ValueError("The results are malformed. Upload the original CSV again.")
+    index = headers.index(PREDICTION_COLUMN)
+    source = StringIO(newline="")
+    writer = csv.writer(source)
+    writer.writerow([name for name in headers if name != PREDICTION_COLUMN])
+    predictions = []
+    for values in reader:
+        if len(values) != len(headers) or not values[index].strip():
+            raise ValueError("The results contain an incomplete row.")
+        predictions.append(values[index])
+        writer.writerow(values[:index] + values[index + 1:])
+    source.seek(0)
+    columns, rows, _ = read_patient_csv(source)
+    return columns, rows, predictions
+
+
 def write_prediction_csv(
     path: Path, columns: list[str], rows: list[dict[str, str]], predictions: list[str]
 ) -> None:
