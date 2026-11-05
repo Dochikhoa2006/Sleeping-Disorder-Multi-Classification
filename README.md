@@ -898,3 +898,27 @@ The page shows up to 100 differences. Download the complete comparison, includin
 unchanged IDs, in baseline order followed by candidate-only IDs. The server does
 not store uploads or load a model. These are comparisons of exported results,
 not accuracy measurements or proof of what caused a difference.
+
+### Benchmark inference performance
+
+```bash
+python -m src.benchmark --batch-sizes 1 10 100 --runs 10 --warmup 2 \
+  --output benchmark.json
+```
+
+The benchmark loads the trusted model once and measures repeated `predict` calls
+on seeded synthetic patient inputs. It reports per-batch mean, median, p95,
+minimum/maximum latency, individual timing samples, and rows per second. Read and
+deserialization time is measured separately. Timing includes pipeline preprocessing
+and inference, but excludes synthetic generation, DataFrame construction, warmup
+calls, output validation, and JSON export. Each batch size gets its own warmups.
+
+The report records the model hash, seed, UTC timestamp, Python/dependency versions,
+and system architecture. Choose up to 10 distinct batch sizes from 1 to 10,000,
+1–100 measured runs, and 0–10 warmups. Omit `--output` for JSON on standard output.
+File output is atomic and cannot replace the model. No patient data is read.
+
+These are local measurements on synthetic inputs, not accuracy tests or HTTP
+latency measurements. A small run count gives limited percentile information;
+background load, caches, hardware, and dependency versions affect results. Compare
+runs under similar conditions rather than treating a single timing as a guarantee.
