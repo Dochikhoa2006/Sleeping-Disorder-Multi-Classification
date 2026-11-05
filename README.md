@@ -922,3 +922,29 @@ These are local measurements on synthetic inputs, not accuracy tests or HTTP
 latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
+
+### Remove duplicate patient profiles
+
+```bash
+python -m src.deduplicate --input-csv patients.csv --output unique-patients.csv
+python -m src.deduplicate --input-csv patients.csv --output latest-profiles.csv --keep last
+```
+
+This retains one row per equivalent engineered input profile, recognizing numeric
+formats, BMI aliases, and trimmed categories using the same fingerprints as
+training and evaluation. Record IDs and other unused columns do not distinguish
+profiles. Choose `--keep first` (the default) or `--keep last` explicitly; retained
+rows stay in their original relative order, with their original field values,
+column order, quoted values, and extra metadata preserved.
+
+The JSON report on standard output contains row counts, source/output hashes, and
+the retained/removed CSV row numbers for every duplicate group. The header is row
+1; quoted multiline values still count as one record. If `Sleep Disorder` exists,
+different label strings on equivalent profiles reject the entire operation.
+Invalid patient input also rejects the operation before writing. Output is atomic
+and cannot overwrite the source or shipped model. No model is loaded.
+
+This intentionally removes repeated input profiles, even if they have different
+record IDs or represent different people/nights. Use it only when that matches
+your cleaning goal. It accepts patient input CSVs; prediction exports containing
+an existing `Predicted Sleep Disorder` column are rejected.
