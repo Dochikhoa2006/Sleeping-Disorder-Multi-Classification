@@ -27,6 +27,7 @@ from src.predict import (
 from src.preprocessing import RAW_FEATURES
 from src.model_info import inspect_model
 from src.evaluation import evaluate_bytes
+from src.calendar_export import render_calendar
 from src.diary import COLUMNS as DIARY_COLUMNS, add_night, load_diary, night_metrics, summarize, render_report as render_diary_report
 
 TEMPLATE_PATH = Path(__file__).with_name("web_ui.html")
@@ -553,7 +554,7 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                              content_type="text/javascript; charset=utf-8")
             elif self.path == "/":
                 self.respond(200, render_page())
-            elif self.path in ("/diary", "/diary.csv", "/diary-report") or self.path.startswith("/diary?"):
+            elif self.path in ("/diary", "/diary.csv", "/diary.ics", "/diary-report") or self.path.startswith("/diary?"):
                 self.diary_get()
             elif self.path == "/explore":
                 self.respond(200, render_scenarios())
@@ -681,6 +682,9 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                     writer.writeheader()
                     writer.writerows(sorted(records, key=lambda row: row["date"]))
                     self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8", filename="sleep-diary.csv")
+                elif self.path == "/diary.ics":
+                    self.respond(200, render_calendar(records, calendar_id=str(diary_path.resolve())),
+                                 content_type="text/calendar; charset=utf-8", filename="sleep-diary.ics")
                 elif self.path == "/diary-report":
                     self.respond(200, render_diary_report(summarize(records, date.today(), 30)))
                 else:

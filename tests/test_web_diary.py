@@ -90,6 +90,7 @@ class BrowserDiaryTests(unittest.TestCase):
         self.assertIn('--diary', self.request()[2])
         self.assertEqual(self.add()[0], 403)
         self.assertEqual(self.request(path='/diary.csv')[0], 404)
+        self.assertEqual(self.request(path='/diary.ics')[0], 404)
         self.assertFalse(self.path.exists())
 
     def test_month_calendar_shows_recorded_and_missing_nights(self):
@@ -125,3 +126,15 @@ class BrowserDiaryTests(unittest.TestCase):
         _, _, body = self.request(path='/diary?month=2026-11')
         self.assertIn('<time datetime="2026-11-01">1</time><strong>0.00 h</strong>', body)
         self.assertIn('<time datetime="2026-11-02">2</time><span class="diary-missing">Not recorded</span>', body)
+
+    def test_calendar_download_exports_overnight_event_without_model_loading(self):
+        self.add()
+        with patch('src.predict.joblib.load') as load:
+            status, headers, body = self.request(path='/diary.ics')
+        load.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertEqual(headers['Content-Type'], 'text/calendar; charset=utf-8')
+        self.assertIn('sleep-diary.ics', headers['Content-Disposition'])
+        self.assertIn('DTSTART:20261101T230000', body)
+        self.assertIn('DTEND:20261102T070000', body)
+        self.assertIn('BEGIN:VCALENDAR', body)

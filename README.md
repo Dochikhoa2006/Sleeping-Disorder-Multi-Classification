@@ -832,3 +832,26 @@ missing entries explicitly and summarizes the selected month's recorded-night
 count and average estimated sleep. A recorded zero-hour estimate remains distinct
 from an unrecorded night. Saving a night opens its month automatically. Calendar
 browsing reads the configured diary without changing it or loading a model.
+
+### Export diary nights to a calendar app
+
+Choose **Export to calendar** on the browser diary page, or run:
+
+```bash
+python -m src.diary export-calendar --output sleep-diary.ics
+```
+
+Import the resulting `.ics` file into a calendar app that supports
+[iCalendar (RFC 5545)](https://www.rfc-editor.org/rfc/rfc5545.html). Each recorded
+night becomes an event from bedtime to wake time, crossing midnight when needed.
+Its description includes time in bed, estimated sleep, awake minutes, and quality.
+Events use floating local times because the diary does not store time zones;
+no daylight-saving adjustments are inferred. Events are marked private and
+transparent, with no alarms. Calendar apps control how those markings are used.
+
+The export is a snapshot, not a live subscription or synchronization service.
+Identifiers stay stable for each date and configured diary path; moving the diary
+changes them. Re-import/update behavior depends on your calendar app. Exporting
+never modifies the diary; CLI output is atomic and cannot overwrite its source.
+Calendar files contain diary information. Importing one into a cloud calendar
+may upload that information through the calendar app.

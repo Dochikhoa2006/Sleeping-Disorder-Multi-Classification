@@ -145,6 +145,8 @@ def main() -> None:
     summary.add_argument("--end", default=date.today().isoformat())
     summary.add_argument("--days", type=int, default=7)
     summary.add_argument("--html", type=Path, help="Also save a printable, self-contained HTML chart.")
+    export = commands.add_parser("export-calendar", help="Save diary nights as an iCalendar .ics file.")
+    export.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
         if args.command == "add":
@@ -153,6 +155,14 @@ def main() -> None:
                       "quality": str(args.quality) if args.quality is not None else ""}
             add_night(args.file, record, replace=args.replace)
             print(f"Saved night {args.date} to {args.file}")
+        elif args.command == "export-calendar":
+            from src.calendar_export import render_calendar
+            if args.output.resolve() == args.file.resolve():
+                raise ValueError("Calendar output must differ from the diary path.")
+            payload = render_calendar(load_diary(args.file), calendar_id=str(args.file.resolve()))
+            with atomic_text_output(args.output, newline="") as output:
+                output.write(payload)
+            print(f"Saved calendar to {args.output}")
         else:
             if args.html and args.html.resolve() == args.file.resolve():
                 raise ValueError("HTML report path must differ from the diary path.")
