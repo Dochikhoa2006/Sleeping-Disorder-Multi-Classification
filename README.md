@@ -999,3 +999,29 @@ write atomically, and cannot replace the input or model. Omit `--output` for JSO
 on standard output. Receipts are provenance records, not digital signatures or
 proof of accuracy; keep the original inputs separately if you need to reproduce
 an inference. Only load trusted model artifacts.
+
+### Verify and replay a prediction receipt
+
+```bash
+python -m src.verify_receipt --receipt receipt.json \
+  --input-csv examples/patients.csv --output verification.json
+```
+
+Supply the original CSV or `--input-json` and the trusted model (override with
+`--model` if needed). Verification checks the receipt schema, exact model hash,
+ordered input fingerprints, and source-file hash when the receipt records one.
+It replays predictions only when the model and input fingerprints match, using
+the same model byte snapshot that was checked, and compares the result and model
+metadata with the receipt. Changed model/input hashes skip deserialization.
+
+The JSON report identifies mismatched input/prediction positions. Exit status is
+0 for a successful verification and 1 for a mismatch or invalid input. Mismatch
+reports are still saved; malformed inputs leave an existing report untouched.
+Output is atomic and cannot replace the receipt, source, or model. Omit `--output`
+for JSON on standard output. Browser receipts have no source-file hash, so that
+check is marked `null`. A changed source file fails its byte check even if its
+logical inputs and replayed predictions match.
+
+This verifies consistency with the supplied artifacts, not who created the receipt
+or when it was created. It is not a digital-signature or accuracy check; the
+receipt's timestamp is only validated for format. Only use trusted model files.

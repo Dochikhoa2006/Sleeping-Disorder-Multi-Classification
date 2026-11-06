@@ -29,8 +29,13 @@ def input_fingerprint(patient: dict) -> str:
 
 def create_receipt(patients: list[dict], model_path: Path = DEFAULT_MODEL_PATH) -> dict:
     validate_patients(patients)
+    return create_receipt_from_bytes(patients, model_path.read_bytes())
+
+
+def create_receipt_from_bytes(patients: list[dict], snapshot: bytes) -> dict:
+    """Predict from one immutable artifact snapshot and record its exact hash."""
+    validate_patients(patients)
     fingerprints = [input_fingerprint(patient) for patient in patients]
-    snapshot = model_path.read_bytes()
     model = joblib.load(BytesIO(snapshot))
     if not hasattr(model, "classes_"):
         raise ValueError("Model must be a fitted classifier with class labels.")
