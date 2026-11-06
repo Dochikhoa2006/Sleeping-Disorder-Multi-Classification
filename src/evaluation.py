@@ -10,10 +10,11 @@ from io import BytesIO
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
-from src.preprocessing import CATEGORICAL_FEATURES, NUMERIC_FEATURES, TARGET_COLUMN, SleepFeatureEngineer
+from src.preprocessing import CATEGORICAL_FEATURES, NUMERIC_FEATURES, RANDOM_STATE, TARGET_COLUMN, SleepFeatureEngineer
 from src.output import atomic_text_output
 
 
@@ -36,11 +37,57 @@ def feature_fingerprints(features: pd.DataFrame) -> pd.Series:
     return pd.util.hash_pandas_object(engineered, index=False)
 
 
-def evaluate_external(data_path: Path, model_path: Path, output_path: Path | None = None) -> dict:
+def validate_bootstrap_options(runs: int, seed: int) -> None:
+    if type(runs) is not int or (runs != 0 and not 100 <= runs <= 2000):
+        raise ValueError("Bootstrap runs must be 0 (disabled) or an integer from 100 to 2000.")
+    if type(seed) is not int or not 0 <= seed <= 2**32 - 1:
+        raise ValueError("Bootstrap seed must be an integer from 0 to 4294967295.")
+
+
+def bootstrap_intervals(target, predictions, groups, labels: list[str], *,
+                        runs: int = 500, seed: int = RANDOM_STATE) -> dict:
+    """Resample complete engineered-profile clusters with the classifier held fixed."""
+    validate_bootstrap_options(runs, seed)
+    if runs == 0:
+        raise ValueError("Interval calculation requires at least 100 bootstrap runs.")
+    actual, predicted, fingerprints = map(np.asarray, (target, predictions, groups))
+    if (any(values.ndim != 1 for values in (actual, predicted, fingerprints))
+            or not len(actual) or len(actual) != len(predicted) or len(actual) != len(fingerprints)):
+        raise ValueError("Bootstrap targets, predictions, and groups must be aligned non-empty vectors.")
+    if not labels or not np.isin(actual, labels).all() or not np.isin(predicted, labels).all():
+        raise ValueError("Bootstrap targets and predictions must use the supplied class labels.")
+    clusters = {}
+    for index, group in enumerate(fingerprints):
+        clusters.setdefault(group, []).append(index)
+    if len(clusters) < 2:
+        raise ValueError("Bootstrap intervals require at least two unseen unique profiles.")
+    members = [np.asarray(indices) for indices in clusters.values()]
+    rng = np.random.default_rng(seed)
+    scores = {"accuracy": [], "macro_f1": []}
+    row_counts = []
+    for _ in range(runs):
+        indices = np.concatenate([members[index] for index in rng.integers(0, len(members), size=len(members))])
+        sampled_actual, sampled_predictions = actual[indices], predicted[indices]
+        scores["accuracy"].append(float(accuracy_score(sampled_actual, sampled_predictions)))
+        scores["macro_f1"].append(float(f1_score(sampled_actual, sampled_predictions,
+                                               labels=labels, average="macro", zero_division=0)))
+        row_counts.append(len(indices))
+    intervals = {name: {"lower": float(np.percentile(values, 2.5)),
+                        "upper": float(np.percentile(values, 97.5))}
+                 for name, values in scores.items()}
+    return {"method": "profile_cluster_percentile", "confidence_level": 0.95,
+            "resamples": runs, "seed": seed, "unique_profiles": len(members),
+            "sampled_rows_min": min(row_counts), "sampled_rows_max": max(row_counts),
+            **intervals}
+
+
+def evaluate_external(data_path: Path, model_path: Path, output_path: Path | None = None, *,
+                      bootstrap_runs: int = 0, bootstrap_seed: int = RANDOM_STATE) -> dict:
     """Score labeled, unseen rows and account for training-profile overlap."""
     if output_path is not None and output_path.resolve() in {data_path.resolve(), model_path.resolve()}:
         raise ValueError("Evaluation output path must differ from data and model paths.")
-    report = evaluate_bytes(data_path.read_bytes(), model_path, compressed=data_path.suffix.lower() == ".gz")
+    report = evaluate_bytes(data_path.read_bytes(), model_path, compressed=data_path.suffix.lower() == ".gz",
+                            bootstrap_runs=bootstrap_runs, bootstrap_seed=bootstrap_seed)
     if output_path is not None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with atomic_text_output(output_path) as output_file:
@@ -49,8 +96,10 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path | Non
     return report
 
 
-def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool = False, include_rows: bool = False) -> dict:
+def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool = False, include_rows: bool = False,
+                   bootstrap_runs: int = 0, bootstrap_seed: int = RANDOM_STATE) -> dict:
     """Evaluate CSV bytes in memory using the same rules as file evaluation."""
+    validate_bootstrap_options(bootstrap_runs, bootstrap_seed)
     model_bytes = model_path.read_bytes()
     pipeline = joblib.load(BytesIO(model_bytes))
     if not hasattr(pipeline, "training_feature_hashes_"):
@@ -100,6 +149,10 @@ def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool =
         "labels": labels,
         **classification_metrics(unseen_target, predictions, labels),
     }
+    if bootstrap_runs:
+        report["bootstrap"] = bootstrap_intervals(unseen_target.to_numpy(), predictions,
+                                                  fingerprints.loc[unseen].to_numpy(), labels,
+                                                  runs=bootstrap_runs, seed=bootstrap_seed)
     if include_rows:
         remaining = iter(predictions)
         diagnostics = []

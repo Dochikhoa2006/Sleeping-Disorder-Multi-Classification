@@ -1025,3 +1025,31 @@ logical inputs and replayed predictions match.
 This verifies consistency with the supplied artifacts, not who created the receipt
 or when it was created. It is not a digital-signature or accuracy check; the
 receipt's timestamp is only validated for format. Only use trusted model files.
+
+### Estimate uncertainty in evaluation scores
+
+```bash
+python -m src.evaluate --data unseen-labeled.csv --bootstrap-runs 500 \
+  --bootstrap-seed 150 --output evaluation-with-intervals.json
+```
+
+This optionally adds 95% percentile bootstrap intervals for accuracy and macro F1.
+Whole engineered-profile groups are sampled with replacement, so duplicate rows
+stay together rather than being treated as independent observations. Training
+profile overlaps are excluded before resampling. Each resample draws the same
+number of groups; row counts can vary with group size. Predictions are computed
+once, with no model refitting or inference during resampling. The report records
+the method, seed, group count, resample count, and lower/upper bounds.
+
+Choose 100–2000 resamples and at least two unseen unique profiles. Intervals are
+disabled by default (`--bootstrap-runs 0`). The fixed model class list is used for
+macro F1 in every resample; classes absent in a resample receive zero F1, matching
+the existing evaluation policy. Results are repeatable for the same inputs, seed,
+and dependency versions. File and gzip evaluation inputs both support this option.
+
+These are approximate percentile intervals, assuming the profile groups are
+independent. Sparse classes, small datasets, dependence between different profiles,
+and biased sampling can make them unreliable or degenerate. They do not include
+model-training uncertainty or establish performance on a different population.
+For background on percentile resampling, see the
+[SciPy bootstrap documentation](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html).

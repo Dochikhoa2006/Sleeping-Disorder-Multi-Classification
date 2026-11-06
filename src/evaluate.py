@@ -8,6 +8,7 @@ from pathlib import Path
 
 from src.evaluation import evaluate_external
 from src.predict import DEFAULT_MODEL_PATH
+from src.preprocessing import RANDOM_STATE
 
 
 def main() -> None:
@@ -15,9 +16,13 @@ def main() -> None:
     parser.add_argument("--data", type=Path, required=True, help="Labeled CSV or gzip-compressed CSV (.gz) to evaluate.")
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
     parser.add_argument("--output", type=Path, help="JSON report destination; omit to print JSON to standard output.")
+    parser.add_argument("--bootstrap-runs", type=int, default=0,
+                        help="Add 95%% profile-cluster percentile intervals using 100–2000 resamples; 0 disables.")
+    parser.add_argument("--bootstrap-seed", type=int, default=RANDOM_STATE)
     arguments = parser.parse_args()
     try:
-        report = evaluate_external(arguments.data, arguments.model, arguments.output)
+        report = evaluate_external(arguments.data, arguments.model, arguments.output,
+                                   bootstrap_runs=arguments.bootstrap_runs, bootstrap_seed=arguments.bootstrap_seed)
     except (OSError, ValueError) as error:
         raise SystemExit(f"Error: {error}") from error
     if arguments.output is None:
