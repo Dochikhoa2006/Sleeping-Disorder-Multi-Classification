@@ -47,6 +47,48 @@ class WebTests(unittest.TestCase):
         self.assertEqual(status, 400)
         load.assert_not_called()
 
+    def drift_upload(self, reference, current):
+        boundary = "DriftComparisonBoundary"
+        body = b""
+        for name, source in (("reference", reference), ("current", current)):
+            body += (f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; filename="patients.csv"\r\n'
+                     'Content-Type: text/csv\r\n\r\n').encode() + source + b"\r\n"
+        body += f"--{boundary}--\r\n".encode()
+        return self.request("POST", "/drift", body, {"Content-Type": f"multipart/form-data; boundary={boundary}"})
+
+    def test_browser_drift_report_matches_shared_calculations_without_loading_model(self):
+        from src.drift import compare_dataset_bytes
+        reference = self.csv_source([DEFAULT_PATIENT])
+        current = self.csv_source([{**DEFAULT_PATIENT, "Age": 50, "Occupation": "Teacher"}])
+        with patch("src.predict.joblib.load") as load:
+            status, headers, body = self.drift_upload(reference, current)
+        load.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        encoded = re.search(r'data:application/json;charset=utf-8;base64,([^"\s]+)', body).group(1)
+        self.assertEqual(json.loads(base64.b64decode(encoded)), compare_dataset_bytes(reference, current))
+        self.assertIn("New categories (1): Teacher", body)
+        self.assertIn("Not defined", body)
+
+    def test_browser_drift_escapes_categories_and_keeps_complete_download(self):
+        reference = self.csv_source([DEFAULT_PATIENT])
+        current = self.csv_source([{**DEFAULT_PATIENT, "Occupation": f"<script>{index}</script>"} for index in range(55)])
+        status, _, body = self.drift_upload(reference, current)
+        self.assertEqual(status, 200)
+        self.assertIn("&lt;script&gt;", body)
+        self.assertNotIn("<script>0</script>", body)
+        self.assertIn("first 50 of 56", body)
+        encoded = re.search(r'data:application/json;charset=utf-8;base64,([^"\s]+)', body).group(1)
+        report = json.loads(base64.b64decode(encoded))
+        self.assertEqual(len(report['categorical']['Occupation']['new_categories']), 55)
+
+    def test_browser_drift_form_and_invalid_uploads(self):
+        self.assertEqual(self.request("GET", "/drift")[0], 200)
+        self.assertEqual(self.request("POST", "/drift", b"x", {"Content-Type": "text/csv"})[0], 415)
+        self.assertEqual(self.request("POST", "/drift", b"x", {
+            "Content-Type": "multipart/form-data; boundary=x", "Content-Length": str(MAX_UPLOAD_BYTES + 1)})[0], 413)
+        self.assertEqual(self.drift_upload(b"wrong,header\n", self.csv_source([DEFAULT_PATIENT]))[0], 400)
+
     def comparison_upload(self, baseline, candidate):
         boundary = "BatchComparisonBoundary"
         body = b""

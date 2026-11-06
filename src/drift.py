@@ -49,9 +49,13 @@ def categorical_shift(reference: pd.Series, current: pd.Series) -> dict:
 
 
 def compare_datasets(reference_path: Path, current_path: Path) -> dict:
+    return compare_dataset_bytes(reference_path.read_bytes(), current_path.read_bytes())
+
+
+def compare_dataset_bytes(reference_bytes: bytes, current_bytes: bytes) -> dict:
+    """Compare uploaded or file-backed snapshots using identical validation rules."""
     frames, descriptions = [], []
-    for path in (reference_path, current_path):
-        snapshot = path.read_bytes()
+    for snapshot in (reference_bytes, current_bytes):
         _, _, patients = read_patient_csv(StringIO(snapshot.decode("utf-8-sig"), newline=""))
         frames.append(SleepFeatureEngineer().transform(pd.DataFrame(patients)))
         descriptions.append({"rows": len(patients), "sha256": hashlib.sha256(snapshot).hexdigest()})

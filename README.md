@@ -1053,3 +1053,17 @@ and biased sampling can make them unreliable or degenerate. They do not include
 model-training uncertainty or establish performance on a different population.
 For background on percentile resampling, see the
 [SciPy bootstrap documentation](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html).
+
+### Explore data drift in the browser
+
+Open `/drift` or choose **Data drift** in the local app. Upload a reference and
+current patient CSV (2 MiB combined including overhead). The dashboard shows
+numeric mean changes, standardized shifts, distribution-distance meters, and
+category frequencies with new/absent values. Labels are optional; the same
+validation and normalization apply as the CLI drift command.
+
+The page displays up to 10 new/absent category names and 50 category rows per
+field. Download the full JSON for every category, all numeric statistics, and
+both source hashes. The report matches the CLI calculation for the same file
+bytes. Uploads are processed in memory without loading a model or persisting
+files. Distances are descriptive and do not set automatic alert thresholds.

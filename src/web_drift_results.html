@@ -1,0 +1,22 @@
+<section class="model-heading evaluation-upload">
+  <div><h2>Distribution comparison</h2><p>Uses the same feature engineering as training, including BMI aliases and blood-pressure parsing.</p></div>
+  <a class="download-link" href="data:application/json;charset=utf-8;base64,$download" download="input-drift.json">Download complete report ↓</a>
+</section>
+<section class="model-stats" aria-label="Dataset comparison summary">
+  <article><p>Reference records</p><strong>$reference</strong></article>
+  <article><p>Current records</p><strong>$current</strong></article>
+  <article><p>New categories across fields</p><strong>$new_categories</strong></article>
+</section>
+<section class="model-panel">
+  <h2>Numeric inputs</h2>
+  <p class="hint">Mean changes use each field's original units. Standardized change divides by the reference standard deviation and is not defined for a constant reference. K–S distance compares the full empirical distributions: 0 means identical, 1 means maximum separation.</p>
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Numeric input comparison">
+    <table><caption>Numeric distribution shifts</caption><thead><tr><th scope="col">Field</th><th scope="col">Reference mean</th><th scope="col">Current mean</th><th scope="col">Mean change</th><th scope="col">Standardized change</th><th scope="col">K–S distance · 0–1</th></tr></thead><tbody>$numeric</tbody></table>
+  </div>
+</section>
+<section class="evaluation-upload"><h2>Categorical inputs</h2><p>Total variation distance compares category shares: 0 means identical, 1 means no overlap in observed categories. Names show up to the first 10 new or absent values, and tables show up to 50 categories per field. The download contains every category.</p>$categories</section>
+<details class="model-panel"><summary>Input fingerprints and report details</summary>
+  <p>Reference SHA-256 <code class="fingerprint">$reference_hash</code></p>
+  <p>Current SHA-256 <code class="fingerprint">$current_hash</code></p>
+  <p>The complete JSON includes medians, ranges, population standard deviations, and every category count/share. All rows are weighted equally, including duplicates.</p>
+</details>

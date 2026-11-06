@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 import numpy as np
-from src.drift import compare_datasets, main, numeric_shift
+from src.drift import compare_datasets, compare_dataset_bytes, main, numeric_shift
 
 
 class DriftTests(unittest.TestCase):
@@ -81,3 +81,11 @@ class DriftTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, 'Error:'):
                     main()
             self.assertEqual(output.read_text(), 'keep')
+
+    def test_uploaded_snapshots_match_file_reports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference = self.write(root, 'reference.csv', [{'Age': 20}])
+            current = self.write(root, 'current.csv', [{'Age': 30}, {'Age': 40}])
+            self.assertEqual(compare_dataset_bytes(reference.read_bytes(), current.read_bytes()),
+                             compare_datasets(reference, current))

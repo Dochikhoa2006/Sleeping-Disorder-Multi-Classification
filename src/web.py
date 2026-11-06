@@ -27,6 +27,7 @@ from src.predict import (
 from src.preprocessing import RAW_FEATURES
 from src.model_info import inspect_model
 from src.evaluation import evaluate_bytes
+from src.drift import compare_dataset_bytes
 from src.receipt import create_receipt
 from src.prediction_diff import compare_prediction_exports, ID_COLUMN
 from src.calendar_export import render_calendar
@@ -368,6 +369,48 @@ def uploaded_file(content_type: str, body: bytes, field_name: str) -> bytes:
     return uploaded_files(content_type, body, (field_name,))[field_name]
 
 
+def render_drift(report: dict | None = None, *, error: str | None = None) -> str:
+    feedback = f'<section class="feedback error" role="alert"><h2>Check your datasets</h2><p>{escape(error)}</p></section>' if error else ''
+    results = ''
+    if report is not None:
+        numeric = []
+        for feature, values in report["numeric"].items():
+            standardized = values["standardized_mean_change"]
+            normalized = f'{standardized:+.3f}' if standardized is not None else 'Not defined'
+            distance = values["ks_distance"]
+            numeric.append(f'<tr><th scope="row">{escape(feature)}</th>'
+                           f'<td>{values["reference"]["mean"]:.2f}</td><td>{values["current"]["mean"]:.2f}</td>'
+                           f'<td>{values["mean_change"]:+.2f}</td><td>{normalized}</td>'
+                           f'<td>{distance:.3f}<meter min="0" max="1" value="{distance}" aria-label="{escape(feature)} distribution distance">{distance:.3f}</meter></td></tr>')
+        categories = []
+        for feature, values in report["categorical"].items():
+            distribution = values["distribution"]
+            rows = ''.join(f'<tr><th scope="row">{escape(row["category"])}</th>'
+                           f'<td>{row["reference_count"]} · {row["reference_share"]:.1%}</td>'
+                           f'<td>{row["current_count"]} · {row["current_share"]:.1%}</td></tr>'
+                           for row in distribution[:50])
+            new = values["new_categories"]
+            absent = values["absent_categories"]
+            names = lambda items: ', '.join(escape(value) for value in items[:10]) + (' …' if len(items) > 10 else '') if items else 'None'
+            distance = values["total_variation_distance"]
+            categories.append(f'<section class="model-panel"><h3>{escape(feature)}</h3>'
+                              f'<p>Total variation distance: <strong>{distance:.3f}</strong></p>'
+                              f'<meter min="0" max="1" value="{distance}" aria-label="{escape(feature)} total variation distance">{distance:.3f}</meter>'
+                              f'<p>New categories ({len(new)}): {names(new)}</p><p>Absent categories ({len(absent)}): {names(absent)}</p>'
+                              f'<details><summary>Category counts and shares · first {min(50, len(distribution))} of {len(distribution)}</summary>'
+                              '<div class="table-scroll"><table><caption>' + escape(feature) + ' distribution</caption>'
+                              '<thead><tr><th scope="col">Category</th><th scope="col">Reference</th><th scope="col">Current</th></tr></thead><tbody>'
+                              + rows + '</tbody></table></div></details></section>')
+        download = base64.b64encode((json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")).decode("ascii")
+        results = Template(TEMPLATE_PATH.with_name("web_drift_results.html").read_text(encoding="utf-8")).substitute(
+            reference=report["reference"]["rows"], current=report["current"]["rows"],
+            new_categories=sum(len(values["new_categories"]) for values in report["categorical"].values()),
+            numeric=''.join(numeric), categories=''.join(categories), download=download,
+            reference_hash=report["reference"]["sha256"], current_hash=report["current"]["sha256"])
+    workspace = Template(TEMPLATE_PATH.with_name("web_drift.html").read_text(encoding="utf-8")).substitute(feedback=feedback, results=results)
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
+
+
 def render_batch_comparison(report: dict | None = None, *, error: str | None = None) -> str:
     feedback = f'<section class="feedback error" role="alert"><h2>Check your exports</h2><p>{escape(error)}</p></section>' if error else ''
     results = ''
@@ -587,6 +630,8 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 csv.writer(output).writerow(RAW_FEATURES)
                 self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8",
                              filename="patient-template.csv")
+            elif self.path == "/drift":
+                self.respond(200, render_drift())
             elif self.path == "/compare-batches":
                 self.respond(200, render_batch_comparison())
             elif self.path == "/compare":
@@ -623,6 +668,9 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                     self.respond_json(405 if self.path == "/api/health" else 404,
                                       {"error": "Use GET for the health check." if self.path == "/api/health" else "API route not found."},
                                       allow="GET" if self.path == "/api/health" else None)
+                return
+            if self.path == "/drift":
+                self.drift_upload()
                 return
             if self.path == "/compare-batches":
                 self.compare_batches()
@@ -793,6 +841,22 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 return
             notice = f'Imported {result["added"]} new nights and replaced {result["replaced"]} existing nights. {result["total"]} entries in the diary.'
             self.respond(200, render_diary(records, notice=notice))
+
+        def drift_upload(self) -> None:
+            if self.headers.get_content_type() != "multipart/form-data":
+                self.respond(415, render_drift(error="Choose two patient CSVs using the drift form."))
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= MAX_UPLOAD_BYTES:
+                    self.respond(413, render_drift(error="Choose files smaller than 2 MiB combined, including upload overhead."))
+                    return
+                files = uploaded_files(self.headers.get("Content-Type", ""), self.rfile.read(length), ("reference", "current"))
+                report = compare_dataset_bytes(files["reference"], files["current"])
+            except (ValueError, TypeError, UnicodeError, csv.Error) as error:
+                self.respond(400, render_drift(error=str(error)))
+                return
+            self.respond(200, render_drift(report))
 
         def compare_batches(self) -> None:
             if self.headers.get_content_type() != "multipart/form-data":

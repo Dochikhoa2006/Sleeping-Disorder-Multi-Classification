@@ -1,0 +1,16 @@
+<section class="comparison-intro">
+  <h2>Compare incoming data with a reference batch</h2>
+  <p>See numeric shifts, category frequencies, and newly appearing values. Labels are optional, and no model is loaded.</p>
+</section>
+$feedback
+<form action="/drift" method="post" enctype="multipart/form-data">
+  <div class="fields">
+    <label for="drift-reference">Reference patient CSV<input id="drift-reference" name="reference" type="file" accept=".csv,text/csv" required></label>
+    <label for="drift-current">Current patient CSV<input id="drift-current" name="current" type="file" accept=".csv,text/csv" required></label>
+  </div>
+  <p class="hint">Use patient input CSVs containing all 11 required fields. Extra columns are ignored. Both files together must be under 2 MiB including upload overhead.</p>
+  <button type="submit">Compare distributions →</button>
+</form>
+$results
+<p class="privacy">The server does not store either upload. Reports contain aggregate category names and counts; review their contents before sharing.</p>
+<p class="limits">Distribution differences can reflect sampling choices or population changes. These descriptive distances are not significance tests, automatic drift alarms, or evidence of reduced model accuracy.</p>
