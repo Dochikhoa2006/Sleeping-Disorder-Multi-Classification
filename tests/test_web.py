@@ -28,6 +28,25 @@ class WebTests(unittest.TestCase):
         with make_server(port=0) as server:
             self.assertEqual(server.server_address[0], "127.0.0.1")
 
+    def test_browser_receipt_download_has_exact_model_hash_and_no_input_fields(self):
+        status, headers, body = self.request("POST", "/receipt.json", urlencode(DEFAULT_PATIENT),
+                                           {"Content-Type": "application/x-www-form-urlencoded"})
+        self.assertEqual(status, 200)
+        self.assertIn('prediction-receipt.json', headers['Content-Disposition'])
+        self.assertEqual(headers['Content-Type'], 'application/json; charset=utf-8')
+        receipt = json.loads(body)
+        self.assertEqual(receipt['model']['sha256'], inspect_model()['model_sha256'])
+        self.assertEqual(receipt['predictions'][0]['prediction'], predict(DEFAULT_PATIENT))
+        self.assertNotIn('Occupation', body)
+        self.assertEqual(self.request('GET', '/receipt.json')[0], 404)
+
+    def test_invalid_browser_receipt_does_not_load_model(self):
+        with patch('src.receipt.joblib.load') as load:
+            status, _, body = self.request('POST', '/receipt.json', urlencode({**DEFAULT_PATIENT, 'Age': 0}),
+                                           {'Content-Type': 'application/x-www-form-urlencoded'})
+        self.assertEqual(status, 400)
+        load.assert_not_called()
+
     def comparison_upload(self, baseline, candidate):
         boundary = "BatchComparisonBoundary"
         body = b""

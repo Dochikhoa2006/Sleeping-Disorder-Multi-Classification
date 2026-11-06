@@ -46,6 +46,7 @@ jobs:
           python -m src.predict --input-json examples/patient.json --output-json "$RUNNER_TEMP/example-predictions.json"
           python -m src.predict --input-csv examples/patients.csv --output-csv "$RUNNER_TEMP/example-predictions.csv"
           python -m src.model_info --include-features > "$RUNNER_TEMP/example-model-info.json"
+          python -m src.receipt --input-csv examples/patients.csv --output "$RUNNER_TEMP/prediction-receipt.json"
           python -m src.deduplicate --input-csv examples/patients.csv --output "$RUNNER_TEMP/unique-patients.csv" > "$RUNNER_TEMP/deduplication.json"
           python -m src.benchmark --batch-sizes 1 10 --runs 2 --warmup 1 --output "$RUNNER_TEMP/example-benchmark.json"
           python -m src.drift --reference examples/patients.csv --current examples/patients.csv --output "$RUNNER_TEMP/example-input-drift.json"

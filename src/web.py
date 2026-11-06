@@ -27,6 +27,7 @@ from src.predict import (
 from src.preprocessing import RAW_FEATURES
 from src.model_info import inspect_model
 from src.evaluation import evaluate_bytes
+from src.receipt import create_receipt
 from src.prediction_diff import compare_prediction_exports, ID_COLUMN
 from src.calendar_export import render_calendar
 from src.diary import COLUMNS as DIARY_COLUMNS, add_night, load_diary, read_diary, merge_nights, night_metrics, summarize, render_report as render_diary_report
@@ -644,7 +645,7 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
             if self.path == "/import-profile":
                 self.import_profile()
                 return
-            if self.path not in ("/predict", "/compare", "/report", "/profile.json", "/explore"):
+            if self.path not in ("/predict", "/compare", "/report", "/profile.json", "/receipt.json", "/explore"):
                 self.respond(404, "Page not found.")
                 return
             if self.headers.get_content_type() != "application/x-www-form-urlencoded":
@@ -662,6 +663,11 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 if any(len(items) != 1 for items in fields.values()):
                     raise ValueError("Each field must be submitted exactly once.")
                 values = {key: items[0] for key, items in fields.items()}
+                if self.path == "/receipt.json":
+                    report = create_receipt([parse_form_patient(values)], model_path)
+                    self.respond(200, json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
+                                 content_type="application/json; charset=utf-8", filename="prediction-receipt.json")
+                    return
                 if self.path == "/profile.json":
                     patient = parse_form_patient(values)
                     validate_patient(patient)

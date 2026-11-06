@@ -971,3 +971,31 @@ files, bind a port, or read a personal diary. `--json` emits a complete structur
 report; exit status is 0 when all requested checks pass and 1 otherwise. Prediction
 checks are skipped if a prerequisite fails, and inference errors are captured in
 the report. Without `--smoke-test`, no joblib artifact is deserialized.
+
+### Save a traceable prediction receipt
+
+Choose **Save prediction receipt** on the patient form, or generate a batch receipt:
+
+```bash
+python -m src.receipt --input-csv examples/patients.csv --output receipt.json
+python -m src.receipt --input-json examples/patient.json
+```
+
+A receipt records a UTC timestamp, schema version, model name/classes, exact model
+SHA-256, and each prediction with its 1-based input position and input fingerprint.
+The model is loaded from the same byte snapshot that is hashed. File-based CLI
+receipts also include the exact source-file hash. The browser button runs a fresh
+prediction on the current form values; it does not reuse an earlier result.
+
+Input fields, record IDs, notes, and other extra metadata are omitted. Per-record
+fingerprints hash sorted, compact UTF-8 JSON of required input fields, with numeric
+values converted to floats. Categorical text and blood-pressure formatting remain
+significant; these fingerprints track declared inputs rather than normalized
+profile equivalence. The receipt still contains predicted classes and fingerprints;
+a fingerprint is not encryption or a guarantee of anonymity.
+
+Inputs are validated before model loading. CLI receipts accept CSV or JSON inputs,
+write atomically, and cannot replace the input or model. Omit `--output` for JSON
+on standard output. Receipts are provenance records, not digital signatures or
+proof of accuracy; keep the original inputs separately if you need to reproduce
+an inference. Only load trusted model artifacts.
