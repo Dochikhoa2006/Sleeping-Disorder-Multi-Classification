@@ -1,0 +1,19 @@
+<section class="timer-intro">
+  <p class="eyebrow">A LITTLE BACKGROUND SPACE</p>
+  <h2>Choose your own sound.</h2>
+  <p>Three textures made from locally generated noise. Find a tone and volume that suit your quiet activity.</p>
+</section>
+<section class="model-panel sound-panel" aria-label="Ambient sound player">
+  <label for="sound-mode">Sound texture
+    <select id="sound-mode"><option value="soft">Soft noise</option><option value="bright">Bright noise</option><option value="deep">Low rumble</option></select>
+  </label>
+  <label for="sound-volume">Volume · <output id="sound-volume-value" for="sound-volume">10%</output>
+    <input id="sound-volume" type="range" min="0" max="30" step="1" value="10">
+  </label>
+  <p id="sound-status" role="status" aria-live="polite">Sound is off. Start when you are ready.</p>
+  <div class="timer-actions"><button id="sound-start" type="button">Start sound</button><button id="sound-stop" class="secondary-button" type="button" disabled>Stop</button></div>
+  <noscript><p class="feedback error">Enable JavaScript to use the sound player.</p></noscript>
+</section>
+<p class="privacy">Audio starts only when you select Start sound. It is generated in your browser, with no microphone access, downloaded recordings, or saved history. Stop it here or close the tab. Your device's volume also controls loudness.</p>
+<p class="limits">This is a background sound tool, with no claim about sleep or health outcomes. It plays independently of the <a href="/timer" target="_blank">wind-down timer</a>; finishing a timer in another tab does not stop the sound.</p>
+<script src="/sound.js" defer></script>

@@ -55,14 +55,14 @@ jobs:
           python -m src.compare_models --baseline models/sleep_disorder_pipeline.joblib --candidate models/sleep_disorder_pipeline.joblib --input-csv examples/patients.csv --fail-on-change > "$RUNNER_TEMP/example-model-comparison.json"
 
   timer:
-    name: Browser timer logic
+    name: Browser interactive tools
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Test countdown and browser controls
-        run: node --test tests/timer.test.cjs
+      - name: Test timer and ambient audio controls
+        run: node --test tests/timer.test.cjs tests/sound.test.cjs
 
   security:
     name: Security

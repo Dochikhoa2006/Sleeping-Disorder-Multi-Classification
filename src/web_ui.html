@@ -114,6 +114,11 @@
     .diary-missing { color: var(--muted); font-size: 12px; }
     .diary-calendar small { font-size: 11px; color: var(--muted); }
     .diary-calendar-nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; margin-top: 15px; }
+    .sound-panel { max-width: 620px; margin: 24px auto; padding: 34px; }
+    .sound-panel > label { display: block; margin-bottom: 26px; font-size: 14px; }
+    #sound-volume { padding: 0; height: 28px; accent-color: var(--accent); cursor: pointer; }
+    .sound-panel #sound-status { min-height: 2em; }
+    button:disabled { cursor: default; opacity: .6; }
     .timer-intro { max-width: 680px; margin: 28px auto; text-align: center; }
     .timer-intro h2 { font-size: clamp(28px, 4vw, 42px); }
     .timer-panel { max-width: 600px; margin: 24px auto; text-align: center; }
@@ -140,7 +145,7 @@
       <h1>A closer look at<br>sleep &amp; lifestyle.</h1>
       <p>Explore how a trained model classifies sleep and lifestyle details as Healthy, Insomnia, or Sleep Apnea.</p>
     </header>
-    <nav aria-label="Prediction tools"><a href="/">Single patient &amp; CSV</a><a href="/compare">Compare profiles</a><a href="/compare-batches">Compare batches</a><a href="/model">Model dashboard</a><a href="/drift">Data drift</a><a href="/evaluate">Evaluate labeled data</a><a href="/guide">Input guide</a><a href="/explore">Scenario explorer</a><a href="/diary">Sleep diary</a><a href="/timer">Wind-down timer</a></nav>
+    <nav aria-label="Prediction tools"><a href="/">Single patient &amp; CSV</a><a href="/compare">Compare profiles</a><a href="/compare-batches">Compare batches</a><a href="/model">Model dashboard</a><a href="/drift">Data drift</a><a href="/evaluate">Evaluate labeled data</a><a href="/guide">Input guide</a><a href="/explore">Scenario explorer</a><a href="/diary">Sleep diary</a><a href="/timer">Wind-down timer</a><a href="/sound">Ambient sound</a></nav>
     <div class="$layout_class">$workspace</div>
     <footer>Educational exploration only. Predictions are not medical advice or a diagnosis.</footer>
   </main>

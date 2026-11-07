@@ -135,6 +135,22 @@ class WebTests(unittest.TestCase):
             "Content-Type": "multipart/form-data; boundary=x", "Content-Length": str(MAX_UPLOAD_BYTES + 1)})[0], 413)
         self.assertEqual(self.comparison_upload(b"wrong,header\n", self.prediction_export(1, "Healthy"))[0], 400)
 
+    def test_ambient_sound_page_and_script_are_local_and_model_free(self):
+        with patch("src.predict.joblib.load") as load:
+            status, headers, body = self.request("GET", "/sound")
+        load.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertIn('src="/sound.js" defer', body)
+        self.assertIn('id="sound-start"', body)
+        self.assertIn('min="0" max="30"', body)
+        self.assertIn("script-src 'self'", headers["Content-Security-Policy"])
+        self.assertNotIn("script-src", self.request("GET", "/")[1]["Content-Security-Policy"])
+        status, headers, script = self.request("GET", "/sound.js")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
+        self.assertIn("class AmbientPlayer", script)
+        self.assertEqual(self.request("POST", "/sound")[0], 404)
+
     def test_browser_timer_serves_script_with_scoped_content_policy(self):
         with patch("src.predict.joblib.load") as load:
             status, headers, body = self.request("GET", "/timer")

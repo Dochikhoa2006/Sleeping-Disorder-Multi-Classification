@@ -1086,3 +1086,23 @@ Removal is atomic, preserves other nights, and reports a missing date without
 changing the diary. Removing the last entry leaves a valid header-only CSV.
 Download a backup first if you may want to restore the entry later. Removal
 updates only the configured diary, not previously exported backups or calendars.
+
+### Local ambient sound player
+
+Open `/sound` or choose **Ambient sound** in the browser navigation. Select soft
+noise, bright noise, or low rumble, adjust the volume slider, and explicitly press
+**Start sound**. Noise is generated in a looping buffer and shaped with a low-pass
+filter using the browser's [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode).
+No audio recordings, microphone access, external audio services, or model calls
+are involved. The page requests no audio context until Start is clicked.
+
+Volume defaults to 10%, with a slider from 0–30%; device
+volume also affects loudness. Modes and volume can change during playback. Stop
+releases the audio context, as does leaving or closing the page. A canceled start
+cannot restart the sound after Stop. Browser audio restrictions or unsupported
+playback produce an on-page message. The player stores no preferences or history.
+
+Audio is independent of the countdown timer, including when that timer is open
+in another tab; timer completion does not stop sound. This is a background sound
+tool, without claims about sleep or health outcomes. Run its control/resource tests
+with `node --test tests/sound.test.cjs` (or include `tests/timer.test.cjs` for both).

@@ -15,7 +15,7 @@ ASSETS = (
     "web_report.html", "web_batch_results.html", "web_batch_comparison.html",
     "web_evaluate.html", "web_evaluation_results.html", "web_evaluation_rows.html",
     "web_input_guide.html", "web_scenarios.html", "web_diary.html", "web_diary_calendar.html",
-    "web_diary_remove.html", "web_timer.html", "web_timer.js", "diary_report.html", "web_drift.html", "web_drift_results.html",
+    "web_sound.html", "web_sound.js", "web_diary_remove.html", "web_timer.html", "web_timer.js", "diary_report.html", "web_drift.html", "web_drift_results.html",
 )
 
 
