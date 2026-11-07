@@ -5,6 +5,14 @@
 $feedback
 $calendar
 <details class="profile-tools">
+  <summary>Remove a diary entry</summary>
+  <form action="/diary-remove" method="post">
+    <p class="hint">Choose a bedtime date to review its entry before removal. You can <a href="/diary.csv" download>download a backup</a> first.</p>
+    <label for="diary-remove-date">Date to remove<input id="diary-remove-date" name="date" type="date" required></label>
+    <button class="secondary-button" type="submit">Review removal →</button>
+  </form>
+</details>
+<details class="profile-tools">
   <summary>Restore a diary CSV backup</summary>
   <form action="/diary-import" method="post" enctype="multipart/form-data">
     <p class="hint">Import a previously downloaded diary CSV. Every row is validated before any changes are saved. New dates are merged; dates missing from the backup stay in your diary.</p>

@@ -6,6 +6,7 @@ import argparse
 import csv
 from datetime import date, timedelta
 import json
+import hashlib
 from html import escape
 from string import Template
 from pathlib import Path
@@ -113,6 +114,29 @@ def merge_nights(path: Path, incoming: list[dict], *, replace: bool = False) -> 
     return {"added": len(additions) - len(conflicts), "replaced": len(conflicts), "total": len(merged)}
 
 
+def night_fingerprint(record: dict) -> str:
+    canonical = json.dumps({key: str(record[key]) for key in COLUMNS}, sort_keys=True,
+                           ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def remove_night(path: Path, day: str, *, expected_fingerprint: str | None = None) -> dict:
+    """Remove exactly one date, rejecting stale browser confirmations."""
+    parse_date(day)
+    records = load_diary(path)
+    selected = next((record for record in records if record["date"] == day), None)
+    if selected is None:
+        raise ValueError("No diary entry exists for this date.")
+    if expected_fingerprint is not None and night_fingerprint(selected) != expected_fingerprint:
+        raise ValueError("This entry changed since you reviewed it. Review the removal again.")
+    remaining = [record for record in records if record["date"] != day]
+    with atomic_text_output(path, newline="") as output:
+        writer = csv.DictWriter(output, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(sorted(remaining, key=lambda record: record["date"]))
+    return {"removed_date": day, "remaining_entries": len(remaining)}
+
+
 def summarize(records: list[dict], end: date, days: int = 7) -> dict:
     if not 1 <= days <= 366:
         raise ValueError("Choose a summary period from 1 to 366 days.")
@@ -181,6 +205,8 @@ def main() -> None:
     restore = commands.add_parser("import", help="Merge a diary CSV backup into the local diary.")
     restore.add_argument("--input-csv", type=Path, required=True)
     restore.add_argument("--replace", action="store_true", help="Replace matching dates; otherwise any conflict rejects the import.")
+    remove = commands.add_parser("remove", help="Remove one diary night by its bedtime date.")
+    remove.add_argument("--date", required=True)
     args = parser.parse_args()
     try:
         if args.command == "add":
@@ -189,6 +215,8 @@ def main() -> None:
                       "quality": str(args.quality) if args.quality is not None else ""}
             add_night(args.file, record, replace=args.replace)
             print(f"Saved night {args.date} to {args.file}")
+        elif args.command == "remove":
+            print(json.dumps(remove_night(args.file, args.date), indent=2))
         elif args.command == "import":
             if args.input_csv.resolve() == args.file.resolve():
                 raise ValueError("Backup input must differ from the destination diary.")

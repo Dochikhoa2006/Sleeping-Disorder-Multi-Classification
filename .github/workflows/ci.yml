@@ -37,6 +37,7 @@ jobs:
           python -S -m src.diary --file "$RUNNER_TEMP/diary.csv" summary --end 2026-11-02 --days 7 --html "$RUNNER_TEMP/diary-report.html"
           python -S -m src.diary --file "$RUNNER_TEMP/diary.csv" export-calendar --output "$RUNNER_TEMP/diary.ics"
           python -S -m src.diary --file "$RUNNER_TEMP/restored-diary.csv" import --input-csv "$RUNNER_TEMP/diary.csv"
+          python -S -m src.diary --file "$RUNNER_TEMP/restored-diary.csv" remove --date 2026-11-01
 
       - name: Run documented example workflows
         run: |

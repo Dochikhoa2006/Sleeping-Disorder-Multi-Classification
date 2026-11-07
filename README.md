@@ -1067,3 +1067,22 @@ field. Download the full JSON for every category, all numeric statistics, and
 both source hashes. The report matches the CLI calculation for the same file
 bytes. Uploads are processed in memory without loading a model or persisting
 files. Distances are descriptive and do not set automatic alert thresholds.
+
+### Remove an incorrect diary entry
+
+In the browser diary, open **Remove a diary entry**, choose its bedtime date,
+and review the details. The entry is removed only after confirming on the next
+page. If it was edited after the confirmation page opened, the operation is
+rejected; review the updated entry again. Canceling or loading a page never
+removes data. Browser removal requires diary storage to be enabled.
+
+The CLI removes a single date directly:
+
+```bash
+python -m src.diary remove --date 2026-11-01
+```
+
+Removal is atomic, preserves other nights, and reports a missing date without
+changing the diary. Removing the last entry leaves a valid header-only CSV.
+Download a backup first if you may want to restore the entry later. Removal
+updates only the configured diary, not previously exported backups or calendars.

@@ -1,4 +1,5 @@
 import csv
+import re
 import http.client
 from io import StringIO
 from pathlib import Path
@@ -92,6 +93,7 @@ class BrowserDiaryTests(unittest.TestCase):
         self.assertEqual(self.request(path='/diary.csv')[0], 404)
         self.assertEqual(self.request(path='/diary.ics')[0], 404)
         self.assertEqual(self.request('POST', path='/diary-import')[0], 403)
+        self.assertEqual(self.request('POST', path='/diary-remove-confirm')[0], 403)
         self.assertFalse(self.path.exists())
 
     def test_month_calendar_shows_recorded_and_missing_nights(self):
@@ -177,3 +179,40 @@ class BrowserDiaryTests(unittest.TestCase):
             with self.subTest(rows=rows):
                 self.assertEqual(self.import_backup(rows, replace=True)[0], 400)
                 self.assertEqual(self.path.read_bytes(), original)
+
+    def removal(self, day='2026-11-01', fingerprint=None):
+        values = {'date': day}
+        if fingerprint is not None:
+            values['fingerprint'] = fingerprint
+        return self.request('POST', path='/diary-remove-confirm' if fingerprint is not None else '/diary-remove',
+                            body=urlencode(values), headers={'Content-Type': 'application/x-www-form-urlencoded'})
+
+    def test_browser_removal_requires_preview_and_confirmation(self):
+        self.add()
+        original = self.path.read_bytes()
+        status, _, body = self.removal()
+        self.assertEqual(status, 200)
+        self.assertIn('Confirm removal of 2026-11-01', body)
+        self.assertEqual(self.path.read_bytes(), original)
+        fingerprint = re.search(r'name="fingerprint" value="([0-9a-f]+)"', body).group(1)
+        self.assertEqual(self.removal(fingerprint=fingerprint)[0], 200)
+        self.assertEqual(load_diary(self.path), [])
+        self.assertEqual(self.request(path='/diary-remove-confirm')[0], 404)
+
+    def test_changed_entry_rejects_stale_browser_confirmation(self):
+        self.add()
+        fingerprint = re.search(r'name="fingerprint" value="([0-9a-f]+)"', self.removal()[2]).group(1)
+        self.add({**self.values, 'quality': '2', 'replace': '1'})
+        updated = self.path.read_bytes()
+        status, _, body = self.removal(fingerprint=fingerprint)
+        self.assertEqual(status, 400)
+        self.assertIn('changed since you reviewed', body)
+        self.assertEqual(self.path.read_bytes(), updated)
+
+    def test_missing_confirmation_fingerprint_cannot_delete(self):
+        self.add()
+        original = self.path.read_bytes()
+        status, _, _ = self.request('POST', path='/diary-remove-confirm', body=urlencode({'date': '2026-11-01'}),
+                                    headers={'Content-Type': 'application/x-www-form-urlencoded'})
+        self.assertEqual(status, 400)
+        self.assertEqual(self.path.read_bytes(), original)

@@ -31,7 +31,7 @@ from src.drift import compare_dataset_bytes
 from src.receipt import create_receipt
 from src.prediction_diff import compare_prediction_exports, ID_COLUMN
 from src.calendar_export import render_calendar
-from src.diary import COLUMNS as DIARY_COLUMNS, add_night, load_diary, read_diary, merge_nights, night_metrics, summarize, render_report as render_diary_report
+from src.diary import COLUMNS as DIARY_COLUMNS, add_night, load_diary, read_diary, merge_nights, remove_night, night_fingerprint, night_metrics, summarize, render_report as render_diary_report
 
 TEMPLATE_PATH = Path(__file__).with_name("web_ui.html")
 EXAMPLE_CSV_PATH = Path(__file__).resolve().parents[1] / "examples" / "patients.csv"
@@ -143,6 +143,15 @@ def render_diary(records: list[dict] | None = None, *, values: dict | None = Non
             checked=' checked' if values.get("replace") == "1" else '', feedback=feedback,
             summary=escape(summary), total=len(records), calendar=render_diary_calendar(records, month or date.today()),
             rows=''.join(rows) or '<tr><td colspan="5">No nights recorded yet.</td></tr>')
+    return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
+
+
+def render_diary_removal(record: dict) -> str:
+    metrics = night_metrics(record)
+    workspace = Template(TEMPLATE_PATH.with_name("web_diary_remove.html").read_text(encoding="utf-8")).substitute(
+        **{key: escape(record[key], quote=True) for key in DIARY_COLUMNS},
+        fingerprint=night_fingerprint(record), month=record["date"][:7],
+        estimated=f'{metrics["estimated_sleep_minutes"] / 60:.2f} h')
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
 
@@ -675,6 +684,9 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
             if self.path == "/compare-batches":
                 self.compare_batches()
                 return
+            if self.path in ("/diary-remove", "/diary-remove-confirm"):
+                self.diary_remove()
+                return
             if self.path in ("/diary-import", "/diary-import-replace"):
                 self.diary_import()
                 return
@@ -809,6 +821,50 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 self.respond(503, "The diary could not be saved. Check its directory and file permissions.")
                 return
             self.respond(200, render_diary(records, saved=True, month=date.fromisoformat(record["date"])))
+
+        def diary_remove(self) -> None:
+            if diary_path is None:
+                self.respond(403, render_diary())
+                return
+            if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+                self.respond(415, "Use the diary removal form.")
+                return
+            confirm = self.path == "/diary-remove-confirm"
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 1024:
+                    self.respond(413, "Removal form must contain between 1 and 1024 bytes.")
+                    return
+                fields = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True, max_num_fields=2)
+                expected = {"date", "fingerprint"} if confirm else {"date"}
+                if set(fields) != expected or any(len(values) != 1 for values in fields.values()):
+                    raise ValueError("Submit the matching removal form with each field once.")
+                day = fields["date"][0]
+                date.fromisoformat(day)
+                with diary_lock:
+                    records = load_diary(diary_path)
+                    record = next((row for row in records if row["date"] == day), None)
+                    if record is None:
+                        raise ValueError("No diary entry exists for this date.")
+                    if confirm:
+                        remove_night(diary_path, day, expected_fingerprint=fields["fingerprint"][0])
+                        records = load_diary(diary_path)
+            except (ValueError, TypeError, UnicodeError, csv.Error) as error:
+                try:
+                    with diary_lock:
+                        records = load_diary(diary_path)
+                except (OSError, ValueError, TypeError, csv.Error):
+                    self.respond(503, "The diary could not be read. No entry was removed.")
+                    return
+                self.respond(400, render_diary(records, error=str(error)))
+                return
+            except OSError:
+                self.respond(503, "The diary could not be updated. Check its directory and file permissions.")
+                return
+            if confirm:
+                self.respond(200, render_diary(records, notice=f"Removed the night dated {day}.", month=date.fromisoformat(day)))
+            else:
+                self.respond(200, render_diary_removal(record))
 
         def diary_import(self) -> None:
             if diary_path is None:

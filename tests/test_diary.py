@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from src.diary import add_night, load_diary, main, night_metrics, summarize, render_report, merge_nights, read_diary
+from src.diary import add_night, load_diary, main, night_metrics, summarize, render_report, merge_nights, read_diary, remove_night, night_fingerprint
 
 
 class DiaryTests(unittest.TestCase):
@@ -157,3 +157,38 @@ class DiaryTests(unittest.TestCase):
             with patch('sys.argv', ['diary', '--file', str(backup), 'import', '--input-csv', str(backup), '--replace']):
                 with self.assertRaisesRegex(SystemExit, 'differ'):
                     main()
+
+    def test_removal_retains_other_dates_and_can_leave_empty_diary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'diary.csv'
+            add_night(path, self.night())
+            add_night(path, self.night(date='2026-11-02'))
+            self.assertEqual(remove_night(path, '2026-11-01')['remaining_entries'], 1)
+            self.assertEqual(load_diary(path)[0]['date'], '2026-11-02')
+            remove_night(path, '2026-11-02')
+            self.assertEqual(load_diary(path), [])
+            self.assertTrue(path.read_text().startswith('date,bedtime'))
+
+    def test_stale_removal_and_missing_dates_leave_diary_untouched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'diary.csv'
+            add_night(path, self.night())
+            fingerprint = night_fingerprint(self.night())
+            add_night(path, self.night(quality='3'), replace=True)
+            before = path.read_bytes()
+            with self.assertRaisesRegex(ValueError, 'changed'):
+                remove_night(path, '2026-11-01', expected_fingerprint=fingerprint)
+            with self.assertRaisesRegex(ValueError, 'No diary entry'):
+                remove_night(path, '2026-11-02')
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_remove_cli_and_missing_file_do_not_create_empty_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'diary.csv'
+            with self.assertRaises(ValueError):
+                remove_night(path, '2026-11-01')
+            self.assertFalse(path.exists())
+            add_night(path, self.night())
+            with patch('sys.argv', ['diary', '--file', str(path), 'remove', '--date', '2026-11-01']), redirect_stdout(StringIO()) as output:
+                main()
+            self.assertEqual(json.loads(output.getvalue())['remaining_entries'], 0)

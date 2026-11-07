@@ -1,0 +1,20 @@
+<section class="model-panel">
+  <p class="eyebrow">REVIEW DIARY REMOVAL</p>
+  <h2>Remove the night dated $date?</h2>
+  <p>This entry will be removed from the configured local diary. Review it before confirming.</p>
+  <dl class="model-details">
+    <dt>Bedtime date</dt><dd>$date</dd>
+    <dt>Bedtime</dt><dd>$bedtime</dd>
+    <dt>Wake time</dt><dd>$wake_time</dd>
+    <dt>Awake minutes</dt><dd>$awake_minutes</dd>
+    <dt>Estimated sleep</dt><dd>$estimated</dd>
+    <dt>Quality</dt><dd>$quality</dd>
+  </dl>
+  <form action="/diary-remove-confirm" method="post">
+    <input type="hidden" name="date" value="$date">
+    <input type="hidden" name="fingerprint" value="$fingerprint">
+    <button type="submit">Confirm removal of $date</button>
+    <a class="download-link" href="/diary?month=$month">Cancel</a>
+  </form>
+  <p class="hint">If the entry changes while this page is open, confirmation will be rejected so you can review the current values.</p>
+</section>
