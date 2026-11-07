@@ -143,6 +143,8 @@ class WebTests(unittest.TestCase):
         self.assertIn('src="/sound.js" defer', body)
         self.assertIn('id="sound-start"', body)
         self.assertIn('min="0" max="30"', body)
+        self.assertIn('id="sound-duration"', body)
+        self.assertIn('value="15" selected', body)
         self.assertIn("script-src 'self'", headers["Content-Security-Policy"])
         self.assertNotIn("script-src", self.request("GET", "/")[1]["Content-Security-Policy"])
         status, headers, script = self.request("GET", "/sound.js")

@@ -26,6 +26,9 @@ class AmbientPlayer {
     this.filter = null;
     this.gain = null;
     this.ticket = 0;
+    this.autoStopSeconds = 0;
+    this.endedAutomatically = false;
+    this.onChange = null;
   }
 
   setMode(mode) {
@@ -42,10 +45,15 @@ class AmbientPlayer {
     if (this.gain && this.context) this.gain.gain.setTargetAtTime(volume, this.context.currentTime, 0.05);
   }
 
-  async start() {
+  async start(autoStopSeconds = 0) {
+    if (!Number.isInteger(autoStopSeconds) || autoStopSeconds < 0 || autoStopSeconds > 3600) {
+      throw new RangeError("Choose an automatic stop duration from 0 to 60 minutes.");
+    }
     if (this.context) return this.state === "playing";
     const ticket = ++this.ticket;
     this.state = "starting";
+    this.autoStopSeconds = autoStopSeconds;
+    this.endedAutomatically = false;
     try {
       const context = this.createContext();
       this.context = context;
@@ -61,7 +69,15 @@ class AmbientPlayer {
       this.source.connect(this.filter);
       this.filter.connect(this.gain);
       this.gain.connect(context.destination);
-      this.source.start();
+      const source = this.source;
+      source.onended = () => {
+        if (this.source !== source || ticket !== this.ticket) return;
+        this.stop("finished");
+        if (this.onChange) this.onChange();
+      };
+      source.start();
+      // Schedule on the audio clock, independent of throttled UI callbacks.
+      if (autoStopSeconds) source.stop(context.currentTime + autoStopSeconds);
       await context.resume();
       if (ticket !== this.ticket || this.context !== context) return false;
       this.state = "playing";
@@ -73,11 +89,15 @@ class AmbientPlayer {
     }
   }
 
-  stop() {
+  stop(reason = "manual") {
     ++this.ticket;
+    this.endedAutomatically = reason === "finished";
     const context = this.context;
     if (this.source) {
-      try { this.source.stop(); } catch (_) { /* Already stopped. */ }
+      this.source.onended = null;
+      if (reason !== "finished") {
+        try { this.source.stop(); } catch (_) { /* Already stopped. */ }
+      }
     }
     for (const node of [this.source, this.filter, this.gain]) {
       if (node) { try { node.disconnect(); } catch (_) { /* Already disconnected. */ } }
@@ -93,6 +113,7 @@ function mountAmbient(doc, browser, player) {
   const stop = doc.getElementById("sound-stop");
   const mode = doc.getElementById("sound-mode");
   const volume = doc.getElementById("sound-volume");
+  const duration = doc.getElementById("sound-duration");
   const output = doc.getElementById("sound-volume-value");
   const status = doc.getElementById("sound-status");
   player = player || new AmbientPlayer(() => {
@@ -103,12 +124,16 @@ function mountAmbient(doc, browser, player) {
   function render(message) {
     start.disabled = player.state !== "stopped";
     stop.disabled = player.state === "stopped";
-    status.textContent = message || (player.state === "playing" ? `Playing ${SOUND_MODES[player.mode].label.toLowerCase()}.` :
-      player.state === "starting" ? "Starting audio…" : "Sound is off. Start when you are ready.");
+    duration.disabled = player.state !== "stopped";
+    status.textContent = message || (player.state === "playing" ?
+      `Playing ${SOUND_MODES[player.mode].label.toLowerCase()}.${player.autoStopSeconds ? ` Stops after ${player.autoStopSeconds / 60} minutes of playback.` : ""}` :
+      player.state === "starting" ? "Starting audio…" : player.endedAutomatically ?
+      "Session complete. Sound is off." : "Sound is off. Start when you are ready.");
     output.textContent = `${Math.round(player.volume * 100)}%`;
   }
+  player.onChange = () => render();
   start.addEventListener("click", async () => {
-    const pending = player.start();
+    const pending = player.start(Number(duration.value) * 60);
     render();
     try { await pending; render(); }
     catch (error) { render(error.message || "Audio could not start. Try again."); }

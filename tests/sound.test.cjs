@@ -6,7 +6,7 @@ function fakeContext(resume = () => Promise.resolve()) {
   const node = () => ({connections: [], disconnected: false,
     connect(next) { this.connections.push(next); }, disconnect() { this.disconnected = true; }});
   const param = () => ({value: 0, setTargetAtTime(value) { this.value = value; }});
-  const source = {...node(), started: 0, stopped: 0, start() { this.started++; }, stop() { this.stopped++; }};
+  const source = {...node(), started: 0, stopped: 0, stopTimes: [], start() { this.started++; }, stop(when) { this.stopped++; this.stopTimes.push(when); }};
   const filter = {...node(), frequency: param(), Q: param()};
   const gain = {...node(), gain: param()};
   return {sampleRate: 1024, currentTime: 0, destination: {}, source, filter, gain, closed: 0,
@@ -72,8 +72,8 @@ test('audio failures clean up resources and invalid settings are rejected', asyn
 
 function fakeDocument() {
   const elements = {};
-  for (const id of ['sound-start', 'sound-stop', 'sound-mode', 'sound-volume', 'sound-volume-value', 'sound-status']) {
-    elements[id] = {textContent: '', disabled: false, value: id === 'sound-mode' ? 'soft' : '10', handlers: {},
+  for (const id of ['sound-start', 'sound-stop', 'sound-mode', 'sound-volume', 'sound-volume-value', 'sound-status', 'sound-duration']) {
+    elements[id] = {textContent: '', disabled: false, value: id === 'sound-mode' ? 'soft' : id === 'sound-duration' ? '15' : '10', handlers: {},
       addEventListener(name, callback) { this.handlers[name] = callback; }};
   }
   return {elements, getElementById(id) { return elements[id]; }};
@@ -107,4 +107,59 @@ test('unsupported browsers receive an actionable message without autoplay', asyn
   await doc.elements['sound-start'].handlers.click();
   assert.match(doc.elements['sound-status'].textContent, /does not support/);
   assert.equal(doc.elements['sound-start'].disabled, false);
+});
+
+test('automatic stop is scheduled on the audio clock and completion releases resources', async () => {
+  const context = fakeContext();
+  context.currentTime = 12;
+  const player = new AmbientPlayer(() => context);
+  let changes = 0;
+  player.onChange = () => changes++;
+  await player.start(300);
+  assert.deepEqual(context.source.stopTimes, [312]);
+  context.source.onended();
+  assert.equal(player.state, 'stopped');
+  assert.equal(player.endedAutomatically, true);
+  assert.equal(context.closed, 1);
+  assert.equal(changes, 1);
+});
+
+test('unlimited playback has no scheduled stop and invalid durations create no context', async () => {
+  const context = fakeContext();
+  let created = 0;
+  const player = new AmbientPlayer(() => { created++; return context; });
+  for (const seconds of [-1, 3601, 1.5, NaN]) await assert.rejects(player.start(seconds), RangeError);
+  assert.equal(created, 0);
+  await player.start(0);
+  assert.deepEqual(context.source.stopTimes, []);
+  player.stop();
+});
+
+test('an old completion callback cannot stop a restarted session', async () => {
+  const contexts = [fakeContext(), fakeContext()];
+  let next = 0;
+  const player = new AmbientPlayer(() => contexts[next++]);
+  await player.start(60);
+  const oldCompletion = contexts[0].source.onended;
+  player.stop();
+  await player.start(120);
+  oldCompletion();
+  assert.equal(player.state, 'playing');
+  assert.equal(contexts[1].closed, 0);
+  player.stop();
+});
+
+test('browser duration selection locks during playback and completion updates its status', async () => {
+  const context = fakeContext();
+  const player = new AmbientPlayer(() => context);
+  const doc = fakeDocument();
+  const browser = {addEventListener() {}};
+  mountAmbient(doc, browser, player);
+  doc.elements['sound-duration'].value = '5';
+  await doc.elements['sound-start'].handlers.click();
+  assert.deepEqual(context.source.stopTimes, [300]);
+  assert.equal(doc.elements['sound-duration'].disabled, true);
+  context.source.onended();
+  assert.equal(doc.elements['sound-duration'].disabled, false);
+  assert.match(doc.elements['sound-status'].textContent, /Session complete/);
 });

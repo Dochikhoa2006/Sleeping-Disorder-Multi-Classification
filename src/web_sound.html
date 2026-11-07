@@ -10,10 +10,14 @@
   <label for="sound-volume">Volume · <output id="sound-volume-value" for="sound-volume">10%</output>
     <input id="sound-volume" type="range" min="0" max="30" step="1" value="10">
   </label>
+  <label for="sound-duration">Automatically stop after
+    <select id="sound-duration"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option><option value="0">Until I stop it</option></select>
+  </label>
   <p id="sound-status" role="status" aria-live="polite">Sound is off. Start when you are ready.</p>
   <div class="timer-actions"><button id="sound-start" type="button">Start sound</button><button id="sound-stop" class="secondary-button" type="button" disabled>Stop</button></div>
   <noscript><p class="feedback error">Enable JavaScript to use the sound player.</p></noscript>
 </section>
-<p class="privacy">Audio starts only when you select Start sound. It is generated in your browser, with no microphone access, downloaded recordings, or saved history. Stop it here or close the tab. Your device's volume also controls loudness.</p>
+<p class="privacy">Audio starts only when you select Start sound. It is generated in your browser, with no microphone access, downloaded recordings, or saved history. The default session stops after 15 minutes of playback. You can also stop it here or close the tab. Your device's volume also controls loudness.</p>
+<p class="hint">Choose the stop duration before starting. Automatic stopping follows the audio playback clock; a sleeping device or suspended audio context can pause that clock.</p>
 <p class="limits">This is a background sound tool, with no claim about sleep or health outcomes. It plays independently of the <a href="/timer" target="_blank">wind-down timer</a>; finishing a timer in another tab does not stop the sound.</p>
 <script src="/sound.js" defer></script>

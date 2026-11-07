@@ -1106,3 +1106,19 @@ Audio is independent of the countdown timer, including when that timer is open
 in another tab; timer completion does not stop sound. This is a background sound
 tool, without claims about sleep or health outcomes. Run its control/resource tests
 with `node --test tests/sound.test.cjs` (or include `tests/timer.test.cjs` for both).
+
+
+### Automatically stop ambient sound
+
+The ambient player has a session-duration selector: 5, 10, 15, 30, or 60 minutes,
+or **Until I stop it**. The default is 15 minutes. Choose the duration before
+starting; it is locked during playback and becomes editable again after Stop or
+completion. Automatic completion releases the audio resources and announces that
+sound is off. Manual Stop still ends playback immediately.
+
+The stop uses [Web Audio scheduling](https://developer.mozilla.org/en-US/docs/Web/API/AudioScheduledSourceNode/stop)
+on the browser's audio clock, independently of throttled
+JavaScript timers in background tabs. It measures playback time rather than wall
+clock time: device sleep or a suspended audio context may pause it. A stale
+completion callback cannot stop a newly restarted session. The standalone
+wind-down timer remains independent of this player.
