@@ -1122,3 +1122,31 @@ JavaScript timers in background tabs. It measures playback time rather than wall
 clock time: device sleep or a suspended audio context may pause it. A stale
 completion callback cannot stop a newly restarted session. The standalone
 wind-down timer remains independent of this player.
+
+### Inspect evaluation results by subgroup
+
+```bash
+python -m src.evaluate --data unseen-labeled.csv \
+  --group-by Gender "BMI Category" --min-group-rows 5 --output subgroup-evaluation.json
+```
+
+Choose one or more distinct fields from `Gender`, `Occupation`, `BMI Category`,
+and `Blood Pressure Category`. These produce separate one-field breakdowns, not
+intersectional combinations. Grouping uses the same trimmed categories, BMI alias
+normalization, and derived pressure categories as the pipeline. Missing category
+values appear as JSON `null` instead of being silently dropped.
+
+Only unseen evaluation rows are included. Each group reports its row count,
+share, unique-profile count, and counts for every model class. Groups meeting
+`--min-group-rows` (default 5) also include accuracy, macro F1, per-class metrics,
+and a confusion matrix. Smaller groups retain counts with `metrics: null` and
+`status: insufficient_rows`. Rows remain weighted equally, including duplicates.
+The full model class list is used for every group's macro F1, including zero F1
+for absent classes. Groups are ordered by descending size, then value.
+
+This reuses the evaluator's single prediction pass and can be combined with
+`--bootstrap-runs` for overall intervals (not per-group intervals). Grouping is
+optional and leaves the ordinary evaluation report unchanged when omitted.
+These are descriptive breakdowns: group size, class mix, and sampling affect the
+scores, so differences alone are not evidence of bias, causation, or fairness.
+Reports include group names such as occupations; review them before sharing.

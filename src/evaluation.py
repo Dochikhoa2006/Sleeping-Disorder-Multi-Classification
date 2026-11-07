@@ -81,13 +81,53 @@ def bootstrap_intervals(target, predictions, groups, labels: list[str], *,
             **intervals}
 
 
+def validate_group_options(group_by, min_rows: int) -> tuple[str, ...]:
+    if (not isinstance(group_by, (tuple, list)) or any(not isinstance(field, str) or field not in CATEGORICAL_FEATURES for field in group_by)
+            or len(group_by) != len(set(group_by))):
+        raise ValueError("Choose distinct categorical grouping fields: " + ", ".join(CATEGORICAL_FEATURES))
+    if type(min_rows) is not int or not 1 <= min_rows <= 100000:
+        raise ValueError("Minimum group rows must be an integer from 1 to 100000.")
+    return tuple(group_by)
+
+
+def subgroup_metrics(features: pd.DataFrame, target: pd.Series, predictions: list[str],
+                     fingerprints: pd.Series, labels: list[str], *, group_by, min_rows: int = 5) -> dict:
+    """Describe independent categorical slices of an already-scored unseen batch."""
+    fields = validate_group_options(group_by, min_rows)
+    if (not len(features) or len(predictions) != len(features)
+            or not features.index.equals(target.index) or not features.index.equals(fingerprints.index)):
+        raise ValueError("Subgroup features, targets, predictions, and fingerprints must be aligned.")
+    engineered = SleepFeatureEngineer().transform(features)
+    predicted = pd.Series(predictions, index=target.index)
+    results = {}
+    for field in fields:
+        groups = []
+        values = engineered[field]
+        for value in pd.unique(values):
+            missing = bool(pd.isna(value))
+            mask = values.isna() if missing else values.eq(value)
+            rows = int(mask.sum())
+            groups.append({"value": None if missing else str(value), "rows": rows,
+                           "share": rows / len(features),
+                           "unique_profiles": int(fingerprints.loc[mask].nunique()),
+                           "class_counts": {label: int(target.loc[mask].eq(label).sum()) for label in labels},
+                           "status": "scored" if rows >= min_rows else "insufficient_rows",
+                           "metrics": classification_metrics(target.loc[mask], predicted.loc[mask].tolist(), labels)
+                                      if rows >= min_rows else None})
+        groups.sort(key=lambda group: (-group["rows"], group["value"] is not None, group["value"] or ""))
+        results[field] = groups
+    return {"min_rows": min_rows, "fields": results}
+
+
 def evaluate_external(data_path: Path, model_path: Path, output_path: Path | None = None, *,
-                      bootstrap_runs: int = 0, bootstrap_seed: int = RANDOM_STATE) -> dict:
+                      bootstrap_runs: int = 0, bootstrap_seed: int = RANDOM_STATE,
+                      group_by=(), min_group_rows: int = 5) -> dict:
     """Score labeled, unseen rows and account for training-profile overlap."""
     if output_path is not None and output_path.resolve() in {data_path.resolve(), model_path.resolve()}:
         raise ValueError("Evaluation output path must differ from data and model paths.")
     report = evaluate_bytes(data_path.read_bytes(), model_path, compressed=data_path.suffix.lower() == ".gz",
-                            bootstrap_runs=bootstrap_runs, bootstrap_seed=bootstrap_seed)
+                            bootstrap_runs=bootstrap_runs, bootstrap_seed=bootstrap_seed,
+                            group_by=group_by, min_group_rows=min_group_rows)
     if output_path is not None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with atomic_text_output(output_path) as output_file:
@@ -97,9 +137,11 @@ def evaluate_external(data_path: Path, model_path: Path, output_path: Path | Non
 
 
 def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool = False, include_rows: bool = False,
-                   bootstrap_runs: int = 0, bootstrap_seed: int = RANDOM_STATE) -> dict:
+                   bootstrap_runs: int = 0, bootstrap_seed: int = RANDOM_STATE,
+                   group_by=(), min_group_rows: int = 5) -> dict:
     """Evaluate CSV bytes in memory using the same rules as file evaluation."""
     validate_bootstrap_options(bootstrap_runs, bootstrap_seed)
+    group_by = validate_group_options(group_by, min_group_rows)
     model_bytes = model_path.read_bytes()
     pipeline = joblib.load(BytesIO(model_bytes))
     if not hasattr(pipeline, "training_feature_hashes_"):
@@ -149,6 +191,10 @@ def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool =
         "labels": labels,
         **classification_metrics(unseen_target, predictions, labels),
     }
+    if group_by:
+        report["subgroups"] = subgroup_metrics(features.loc[unseen], unseen_target, predictions,
+                                               fingerprints.loc[unseen], labels, group_by=group_by,
+                                               min_rows=min_group_rows)
     if bootstrap_runs:
         report["bootstrap"] = bootstrap_intervals(unseen_target.to_numpy(), predictions,
                                                   fingerprints.loc[unseen].to_numpy(), labels,

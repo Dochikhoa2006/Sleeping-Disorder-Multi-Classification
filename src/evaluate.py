@@ -8,7 +8,7 @@ from pathlib import Path
 
 from src.evaluation import evaluate_external
 from src.predict import DEFAULT_MODEL_PATH
-from src.preprocessing import RANDOM_STATE
+from src.preprocessing import CATEGORICAL_FEATURES, RANDOM_STATE
 
 
 def main() -> None:
@@ -19,10 +19,15 @@ def main() -> None:
     parser.add_argument("--bootstrap-runs", type=int, default=0,
                         help="Add 95%% profile-cluster percentile intervals using 100–2000 resamples; 0 disables.")
     parser.add_argument("--bootstrap-seed", type=int, default=RANDOM_STATE)
+    parser.add_argument("--group-by", nargs="+", choices=CATEGORICAL_FEATURES,
+                        help="Add separate score breakdowns for categorical input fields.")
+    parser.add_argument("--min-group-rows", type=int, default=5,
+                        help="Minimum subgroup size for displaying scores; smaller groups retain counts only.")
     arguments = parser.parse_args()
     try:
         report = evaluate_external(arguments.data, arguments.model, arguments.output,
-                                   bootstrap_runs=arguments.bootstrap_runs, bootstrap_seed=arguments.bootstrap_seed)
+                                   bootstrap_runs=arguments.bootstrap_runs, bootstrap_seed=arguments.bootstrap_seed,
+                                   group_by=arguments.group_by or (), min_group_rows=arguments.min_group_rows)
     except (OSError, ValueError) as error:
         raise SystemExit(f"Error: {error}") from error
     if arguments.output is None:
