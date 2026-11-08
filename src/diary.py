@@ -152,6 +152,30 @@ def summarize(records: list[dict], end: date, days: int = 7) -> dict:
             "nights": nights}
 
 
+def compare_periods(records: list[dict], end: date, days: int = 7) -> dict:
+    """Compare adjacent equal windows using recorded nights only."""
+    if type(days) is not int or not 1 <= days <= 366:
+        raise ValueError("Choose a comparison period from 1 to 366 days.")
+    current = summarize(records, end, days)
+    previous = summarize(records, end - timedelta(days=days), days)
+    metrics = ("average_estimated_sleep_hours", "average_quality",
+               "average_awake_minutes", "average_sleep_efficiency_percent")
+    for period in (previous, current):
+        nights = period.pop("nights")
+        period["rated_nights"] = sum(n["quality"] is not None for n in nights)
+        period["average_awake_minutes"] = (
+            sum(n["time_in_bed_minutes"] - n["estimated_sleep_minutes"] for n in nights) / len(nights)
+            if nights else None)
+        period["average_sleep_efficiency_percent"] = (
+            sum(n["estimated_sleep_minutes"] / n["time_in_bed_minutes"] * 100 for n in nights) / len(nights)
+            if nights else None)
+    changes = {metric: current[metric] - previous[metric]
+               if current[metric] is not None and previous[metric] is not None else None
+               for metric in metrics}
+    return {"days_per_period": days, "previous": previous, "current": current,
+            "change_current_minus_previous": changes}
+
+
 def render_report(report: dict) -> str:
     """Create a portable, script-free chart with an explicit row for missing nights."""
     nights = {row["date"]: row for row in report["nights"]}
@@ -200,6 +224,9 @@ def main() -> None:
     summary.add_argument("--end", default=date.today().isoformat())
     summary.add_argument("--days", type=int, default=7)
     summary.add_argument("--html", type=Path, help="Also save a printable, self-contained HTML chart.")
+    compare = commands.add_parser("compare", help="Compare two adjacent diary periods as JSON.")
+    compare.add_argument("--end", default=date.today().isoformat())
+    compare.add_argument("--days", type=int, default=7, help="Days in each period (1–366).")
     export = commands.add_parser("export-calendar", help="Save diary nights as an iCalendar .ics file.")
     export.add_argument("--output", type=Path, required=True)
     restore = commands.add_parser("import", help="Merge a diary CSV backup into the local diary.")
@@ -215,6 +242,9 @@ def main() -> None:
                       "quality": str(args.quality) if args.quality is not None else ""}
             add_night(args.file, record, replace=args.replace)
             print(f"Saved night {args.date} to {args.file}")
+        elif args.command == "compare":
+            print(json.dumps(compare_periods(load_diary(args.file), parse_date(args.end), args.days),
+                             indent=2, allow_nan=False))
         elif args.command == "remove":
             print(json.dumps(remove_night(args.file, args.date), indent=2))
         elif args.command == "import":

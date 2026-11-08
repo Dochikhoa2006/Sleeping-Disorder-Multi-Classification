@@ -670,6 +670,23 @@ ending today. No diary data is sent anywhere. These are self-reported estimates,
 not measurements or a medical assessment. This is a local, single-writer tool;
 avoid simultaneous edits from multiple processes.
 
+### Compare diary periods
+
+```bash
+python -m src.diary compare --end 2026-11-07 --days 7
+```
+
+Compare November 1–7 with October 25–31, or choose any end date and 1–366
+days per period. JSON includes both windows, recorded/missing nights, rated-night
+counts, and changes calculated as current minus previous. Metrics cover average
+estimated sleep hours, awake minutes, quality, and sleep efficiency (the mean of
+each recorded night's estimated sleep divided by time in bed, as a percentage).
+Efficiency changes are percentage points. Missing nights are excluded from means;
+quality uses rated nights only. A change is `null` if either period lacks its
+required observations. Unequal coverage and self-reporting can affect comparisons;
+the report does not assign health scores or infer causes. This read-only command
+needs only Python's standard library and defaults to two seven-day windows ending today.
+
 ### Export a visual diary report
 
 ```bash
