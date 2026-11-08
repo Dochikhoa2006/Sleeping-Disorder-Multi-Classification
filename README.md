@@ -916,6 +916,22 @@ unchanged IDs, in baseline order followed by candidate-only IDs. The server does
 not store uploads or load a model. These are comparisons of exported results,
 not accuracy measurements or proof of what caused a difference.
 
+Use the same comparison in scripts without starting the browser app:
+
+```bash
+python -m src.compare_exports --baseline previous.csv --candidate latest.csv \
+  --output comparison.json --fail-on-change
+```
+
+The JSON report contains every record and category count plus SHA-256 hashes of
+both original files. Omit `--output` for JSON on standard output. With
+`--fail-on-change`, any input or prediction change, added ID, or removed ID exits
+with status 1 **after** the report is produced; identical records exit 0. Without
+that flag, valid comparisons exit 0 even when differences exist. Invalid input
+fails without replacing an existing output report. Output cannot overwrite either
+input or the shipped model. Files are processed locally without loading a model;
+the report includes record IDs and predicted labels, so treat it as patient data.
+
 ### Benchmark inference performance
 
 ```bash
