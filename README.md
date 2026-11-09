@@ -956,6 +956,28 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Sample complete profile groups
+
+```bash
+python -m src.sample_data --input-csv patients.csv --output sample.csv \
+  --profiles 25 --seed 150
+```
+
+Select a reproducible random subset of unique engineered patient profiles without
+loading a model. Every row belonging to a selected profile is retained, including
+duplicates with different IDs or metadata. Selection ignores labels and extra
+columns and uses the same feature normalization as overlap checks. The output
+preserves original column order, field values, and relative row order. Because
+whole groups are sampled, `--profiles` controls unique profiles rather than rows.
+
+Each profile has equal selection probability; this does not stratify labels or
+guarantee a representative sample. For the same feature data, seed, and dependency
+versions, reordering the input does not change which profiles are selected. JSON
+on standard output records seed, row/profile counts, and source/output hashes.
+Requesting more profiles than available fails without replacing an existing
+output. The source and shipped model cannot be overwritten. Sampled CSVs retain
+patient values and metadata and require the same care as the originals.
+
 ### Audit overlap between datasets
 
 ```bash
