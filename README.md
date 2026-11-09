@@ -956,6 +956,29 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Convert patient input formats
+
+```bash
+python -m src.convert --input-json examples/patient.json --to csv --output patients.csv
+python -m src.convert --input-csv patients.csv --to json --output patients.json
+cat examples/patient.json | python -m src.convert --input-json - --to csv
+```
+
+Convert a JSON patient object, JSON batch, or patient input CSV without loading a
+model. Every record must pass the normal prediction input validation before any
+output is written. Exports contain exactly the 11 raw classifier fields in their
+standard order; extra columns such as IDs, notes, labels, and source markers are
+discarded. JSON output is always an array, and numeric fields become JSON numbers.
+Category text and blood-pressure formatting are retained; this command does not
+apply the model's category normalization. CSV quoting handles commas and quotes.
+
+Omit `--output` or use `--output -` to write only the converted data to standard
+output. Use `-` with either input option to read standard input. File exports are
+atomic, invalid batches preserve existing output, and the input and shipped model
+cannot be overwritten. Prediction-export CSVs are rejected; use patient inputs.
+Removing metadata does not anonymize health data: the retained feature values may
+still identify someone. Source files remain unchanged.
+
 ### Sample complete profile groups
 
 ```bash
