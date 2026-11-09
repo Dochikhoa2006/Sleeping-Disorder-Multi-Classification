@@ -956,6 +956,29 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Audit overlap between datasets
+
+```bash
+python -m src.overlap --reference train.csv --current test.csv \
+  --output overlap.json --fail-on-overlap
+```
+
+Check two validated patient input CSVs for shared engineered profiles without
+loading a model. Matching ignores record IDs, labels, and other metadata, and
+uses the classifier's numeric conversion, trimmed categories, BMI aliases, and
+blood-pressure features. The JSON report includes file hashes, row and unique
+profile counts, duplicate rows within each file, shared row fractions, exclusive
+profile counts, and Jaccard similarity (shared unique profiles divided by their
+union). Repeated profiles count once for similarity but each occurrence counts
+in shared rows. Neither patient values nor individual profile hashes are exported.
+
+Omit `--output` for JSON on standard output. `--fail-on-overlap` exits 1 after
+producing the report when any profile is shared; otherwise valid audits exit 0.
+Invalid CSVs leave existing reports intact, and output cannot overwrite either
+input or the shipped model. This identifies matching feature profiles, not
+patient identity: different measurements from the same person may remain undetected.
+Zero overlap alone does not establish an independent or representative test set.
+
 ### Remove duplicate patient profiles
 
 ```bash
