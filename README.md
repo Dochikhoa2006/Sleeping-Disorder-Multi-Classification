@@ -977,6 +977,27 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Export valid records from a mixed-quality batch
+
+```bash
+python -m src.clean_batch --input-csv incoming.csv --output valid-patients.csv > cleaning-report.json
+```
+
+Validate every CSV record and export only those accepted by the prediction input
+validator. Valid rows retain their original values, columns, metadata, and order;
+invalid records are excluded without attempting repairs. JSON on standard output
+includes input/output hashes, retained source record numbers, and every rejected
+record's first validation error. Record numbers start at 2 after the header and
+count quoted multiline records once. Reports omit patient values and metadata.
+
+If records are rejected, the command exits 1 **after** writing the valid subset
+and report; no rejections means exit 0. Invalid headers, broken CSV quoting,
+empty input, or no valid rows fail without replacing existing output. Use
+`src.audit` to inspect all-invalid batches. The source and shipped model cannot
+be overwritten. No model is loaded. Review exclusions before training or analysis,
+since removing invalid rows may change the dataset's composition. Exported CSVs
+retain personal data and require the same care as the input.
+
 ### Export the patient input JSON Schema
 
 ```bash
