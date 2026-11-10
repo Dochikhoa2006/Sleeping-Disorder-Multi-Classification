@@ -670,6 +670,27 @@ ending today. No diary data is sent anywhere. These are self-reported estimates,
 not measurements or a medical assessment. This is a local, single-writer tool;
 avoid simultaneous edits from multiple processes.
 
+### Describe schedule regularity
+
+```bash
+python -m src.diary regularity --end 2026-11-10 --days 14
+```
+
+This read-only, standard-library command reports mean and maximum absolute
+bedtime and wake-time changes between pairs of consecutive bedtime dates. Clock
+changes use the shortest distance around midnight: 23:45 to 00:15 is 30 minutes.
+They are unsigned and at most 12 hours, so they describe clock consistency rather
+than elapsed time or whether a schedule moved earlier or later. Wake times remain
+associated with their entry's bedtime date.
+
+Only adjacent dates recorded within the requested 1–366 day window form pairs;
+gaps and dates outside the window are excluded. JSON includes recorded/missing
+nights, observed and possible pair counts, and pair coverage. With no observed
+pairs, change metrics are `null`; a one-day window also has `null` coverage.
+Zero change means matching clock times in observed pairs, not complete coverage.
+These self-reported wall-clock estimates make no time-zone/DST adjustments and
+do not assign a health score or assess sleep quality.
+
 ### Compare diary periods
 
 ```bash

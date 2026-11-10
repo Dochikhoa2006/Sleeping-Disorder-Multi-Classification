@@ -227,6 +227,9 @@ def main() -> None:
     compare = commands.add_parser("compare", help="Compare two adjacent diary periods as JSON.")
     compare.add_argument("--end", default=date.today().isoformat())
     compare.add_argument("--days", type=int, default=7, help="Days in each period (1–366).")
+    regularity = commands.add_parser("regularity", help="Describe clock-time changes between consecutive nights.")
+    regularity.add_argument("--end", default=date.today().isoformat())
+    regularity.add_argument("--days", type=int, default=14)
     export = commands.add_parser("export-calendar", help="Save diary nights as an iCalendar .ics file.")
     export.add_argument("--output", type=Path, required=True)
     restore = commands.add_parser("import", help="Merge a diary CSV backup into the local diary.")
@@ -242,6 +245,10 @@ def main() -> None:
                       "quality": str(args.quality) if args.quality is not None else ""}
             add_night(args.file, record, replace=args.replace)
             print(f"Saved night {args.date} to {args.file}")
+        elif args.command == "regularity":
+            from src.regularity import schedule_regularity
+            print(json.dumps(schedule_regularity(load_diary(args.file), parse_date(args.end), args.days),
+                             indent=2, allow_nan=False))
         elif args.command == "compare":
             print(json.dumps(compare_periods(load_diary(args.file), parse_date(args.end), args.days),
                              indent=2, allow_nan=False))
