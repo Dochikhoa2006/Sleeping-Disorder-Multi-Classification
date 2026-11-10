@@ -27,6 +27,11 @@ CSV_NUMERIC_FEATURES = (
     "Stress Level", "Heart Rate", "Daily Steps",
 )
 PREDICTION_COLUMN = "Predicted Sleep Disorder"
+NUMERIC_RANGES = {
+    "Age": (1, 120), "Sleep Duration": (0, 24), "Quality of Sleep": (1, 10),
+    "Physical Activity Level": (0, 1440), "Stress Level": (1, 10),
+    "Heart Rate": (20, 250), "Daily Steps": (0, 100000),
+}
 
 
 def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -174,16 +179,7 @@ def validate_patient(patient: dict[str, Any]) -> None:
         if not isinstance(patient[feature], str) or not patient[feature].strip():
             raise ValueError(f"'{feature}' must be a non-empty string.")
 
-    ranges = {
-        "Age": (1, 120),
-        "Sleep Duration": (0, 24),
-        "Quality of Sleep": (1, 10),
-        "Physical Activity Level": (0, 1_440),
-        "Stress Level": (1, 10),
-        "Heart Rate": (20, 250),
-        "Daily Steps": (0, 100_000),
-    }
-    for feature, (minimum, maximum) in ranges.items():
+    for feature, (minimum, maximum) in NUMERIC_RANGES.items():
         value = patient[feature]
         if (
             isinstance(value, bool)

@@ -977,6 +977,27 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Export the patient input JSON Schema
+
+```bash
+python -m src.schema --output patient.schema.json
+python -m src.schema --batch --output batch.schema.json
+```
+
+Export a Draft 2020-12 JSON Schema for a single patient or a nonempty patient
+array, without loading a model. Omit `--output` for JSON on standard output.
+The schema includes all 11 required fields, numeric types and inclusive limits,
+nonblank category strings, and blood-pressure string syntax. Extra metadata
+properties are allowed, matching prediction inputs. Numeric limits share the
+runtime validator's definitions. File output is atomic and cannot replace the
+shipped model.
+
+This schema supports form generators and early structural checks. Blood-pressure
+component bounds and the systolic-greater-than-diastolic relationship still need
+the runtime validator (`python -m src.predict --input-json file.json --validate-only`).
+Duplicate JSON keys also require the repository's strict parser. The schema
+describes accepted input structure, not supported clinical use or model accuracy.
+
 ### Check category coverage against a saved model
 
 ```bash
