@@ -977,6 +977,28 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Audit conflicting training labels
+
+```bash
+python -m src.label_audit --input-csv labeled.csv --output label-audit.json
+```
+
+Validate patient inputs and require an explicit `Sleep Disorder` column containing
+`Healthy`, `Insomnia`, or `Sleep Apnea`. The audit groups equivalent profiles using
+the classifier's feature normalization, ignoring IDs and other metadata, then
+reports every group with multiple labels. JSON includes all class counts, unique
+profile and duplicate-row counts, affected-row totals, and each conflicting
+group's CSV record numbers and label counts. Record numbering starts at 2 after
+the header; quoted multiline records still count as one record.
+
+Conflicts produce exit status 1 after the complete report is written; consistent
+data exits 0. Omit `--output` for JSON on standard output. Invalid input does not
+replace an existing report, and output cannot overwrite the input or shipped
+model. No model is loaded and source data is unchanged. Reports omit raw patient
+fields and IDs but include labels and row references. Conflicting profiles may
+represent different people or observations: review them rather than automatically
+choosing a majority label. Consistent labels alone do not establish correctness.
+
 ### Convert patient input formats
 
 ```bash
