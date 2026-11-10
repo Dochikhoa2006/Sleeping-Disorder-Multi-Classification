@@ -977,6 +977,27 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Check category coverage against a saved model
+
+```bash
+python -m src.coverage --input-csv patients.csv --output coverage.json --fail-on-unknown
+```
+
+Compare normalized categorical inputs with the saved pipeline's fitted encoder,
+including the derived blood-pressure category. JSON lists previously unseen
+category values and counts per field, plus the number of distinct rows affected
+across all fields. BMI aliases and trimmed category text use the saved feature
+engineering step. Input validation completes before the trusted model is loaded;
+no predictions are run. Use `--model` to inspect a compatible project pipeline.
+
+Omit `--output` for JSON on standard output. `--fail-on-unknown` returns status 1
+after writing a report if any row contains an unknown category. Without it, valid
+checks exit 0. Output cannot overwrite input or model files. Reports include
+category names, which may contain sensitive input text. The current encoder
+ignores unseen categories during inference, so this report helps reveal that
+condition; it does not measure accuracy, numeric coverage, or clinical validity.
+Only load trusted joblib artifacts because loading them can execute code.
+
 ### Audit conflicting training labels
 
 ```bash
