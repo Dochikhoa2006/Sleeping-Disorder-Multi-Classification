@@ -977,6 +977,28 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Verify an exported training/test split
+
+```bash
+python -m src.verify_split --directory split-output --source labeled.csv
+```
+
+Check a directory produced by `src.split_data`, using its fixed `train.csv`,
+`test.csv`, and `manifest.json` filenames. The read-only verifier recomputes file
+hashes, row counts, unique profile counts, and class distributions. It also checks
+matching columns and independently confirms that normalized profiles do not cross
+the partition boundary. Supplying `--source` checks the original file hash and
+that all original rows appear exactly once across the combined partitions,
+including the multiplicity of duplicate rows and all metadata field values.
+
+JSON on standard output gives each check's result. Exit 0 means all requested
+checks passed; mismatches produce the complete report then exit 1. Missing or
+malformed files fail with an error. Omit `--source` to verify only the saved split;
+source checks are then `null`. No model is loaded or files modified. Hash checks
+detect changes relative to the supplied manifest, which is not a signed or
+independently authenticated record. Passing does not establish patient-level
+independence when the same person has different feature measurements.
+
 ### Export a portable evaluation report
 
 ```bash
