@@ -977,6 +977,26 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Export a portable evaluation report
+
+```bash
+python -m src.evaluate --data labeled-unseen.csv --output evaluation.json
+python -m src.evaluation_report --input-json evaluation.json --output evaluation.html
+```
+
+Open the self-contained HTML file to review accuracy, macro F1, evaluated-row
+count, and a labeled confusion matrix, or print it to PDF from your browser.
+The report includes available model/data provenance and the original JSON file's
+SHA-256. It has no scripts or external assets and loads no model. Text is escaped,
+and matrix counts, row totals, accuracy, and macro F1 are checked for consistency
+before output is replaced. Use unrounded JSON from the evaluator. Invalid reports
+preserve an existing HTML file; output cannot overwrite the input or shipped model.
+
+This export summarizes aggregate scores. Optional subgroup, bootstrap, and row
+diagnostics remain in the original JSON. Treat any custom class/model names in
+the report according to their sensitivity; successful consistency checks do not
+authenticate the source or establish model accuracy on other populations.
+
 ### Export valid records from a mixed-quality batch
 
 ```bash
