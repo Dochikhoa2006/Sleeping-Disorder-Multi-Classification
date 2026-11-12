@@ -997,6 +997,27 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Merge validated patient batches
+
+```bash
+python -m src.merge_data --input-csv january.csv february.csv march.csv \
+  --output combined.csv > merge-report.json
+```
+
+Combine two or more patient input CSVs in the specified file order without
+loading a model. All inputs must have the same column names, including metadata;
+column order may differ. Output uses the first file's column order and preserves
+original field strings, metadata, and within-file row order. Duplicate profiles
+and IDs are retained; use the separate audit/deduplication tools if needed.
+
+Every input is validated before output is replaced. A bad record, differing
+schema, repeated input path, or output/input collision rejects the merge and
+leaves an existing output intact. The shipped model cannot be overwritten.
+JSON on standard output records each source's hash and row count, its record
+range in the output, and the combined file hash. Record numbering starts at 2
+after the header, counting quoted multiline records once. Output retains personal
+data; combining files does not establish label consistency or patient independence.
+
 ### Verify an exported training/test split
 
 ```bash
