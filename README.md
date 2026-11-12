@@ -670,6 +670,26 @@ ending today. No diary data is sent anywhere. These are self-reported estimates,
 not measurements or a medical assessment. This is a local, single-writer tool;
 avoid simultaneous edits from multiple processes.
 
+### Preview differences between diary backups
+
+```bash
+python -S -m src.compare_diaries --baseline diary.csv --candidate backup.csv \
+  --output diary-changes.json --fail-on-change
+```
+
+Compare validated diary CSVs by bedtime date without modifying them or loading
+ML dependencies. JSON includes file hashes, night counts, added/removed dates,
+and changed dates with field names, excluding sleep times and ratings. Row
+reordering does not count as a change; stored field strings are compared exactly.
+Header-only backups are valid empty diaries. Duplicate dates and invalid records
+reject the comparison and preserve an existing output report.
+
+Omit `--output` for JSON on standard output. With `--fail-on-change`, any added,
+removed, or changed date exits 1 after the complete report is produced; otherwise
+valid comparisons exit 0. Output cannot overwrite either input. Dates and hashes
+may still be sensitive. This compares snapshots: the diary import command merges
+entries and does not delete baseline dates absent from a backup.
+
 ### Describe schedule regularity
 
 ```bash
