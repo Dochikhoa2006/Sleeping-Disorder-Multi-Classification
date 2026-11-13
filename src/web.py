@@ -28,6 +28,7 @@ from src.preprocessing import RAW_FEATURES
 from src.model_info import inspect_model
 from src.evaluation import evaluate_bytes
 from src.drift import compare_dataset_bytes
+from src.audit import audit_patients
 from src.receipt import create_receipt
 from src.prediction_diff import compare_prediction_exports, ID_COLUMN
 from src.calendar_export import render_calendar
@@ -623,9 +624,10 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
             elif self.path == "/api/health":
                 self.respond_json(200, {"status": "ok"})
             elif self.path.startswith("/api/"):
-                self.respond_json(405 if self.path == "/api/predict" else 404,
-                                  {"error": "Use POST for predictions." if self.path == "/api/predict" else "API route not found."},
-                                  allow="POST" if self.path == "/api/predict" else None)
+                post_route = self.path in {"/api/predict", "/api/validate"}
+                self.respond_json(405 if post_route else 404,
+                                  {"error": "Use POST for this API route." if post_route else "API route not found."},
+                                  allow="POST" if post_route else None)
             elif self.path == "/sound":
                 self.respond(200, render_sound(), allow_scripts=True)
             elif self.path == "/sound.js":
@@ -681,8 +683,8 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                     self.respond(403, "Local requests only.")
                 return
             if self.path.startswith("/api/"):
-                if self.path == "/api/predict":
-                    self.api_predict()
+                if self.path in {"/api/predict", "/api/validate"}:
+                    self.api_predict(validation_only=self.path == "/api/validate")
                 else:
                     self.respond_json(405 if self.path == "/api/health" else 404,
                                       {"error": "Use GET for the health check." if self.path == "/api/health" else "API route not found."},
@@ -968,7 +970,7 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
             else:
                 self.respond(200, output.getvalue(), content_type="text/csv; charset=utf-8", filename="sleep-predictions.csv")
 
-        def api_predict(self) -> None:
+        def api_predict(self, *, validation_only: bool = False) -> None:
             if self.headers.get_content_type() != "application/json":
                 self.respond_json(415, {"error": "Content-Type must be application/json."})
                 return
@@ -979,6 +981,9 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                     return
                 records = read_patient_json(StringIO(self.rfile.read(length).decode("utf-8-sig")))
                 patients = records if isinstance(records, list) else [records]
+                if validation_only:
+                    self.respond_json(200, audit_patients(patients))
+                    return
                 predictions = predict_many(patients, model_path)
             except (ValueError, TypeError, UnicodeError) as error:
                 self.respond_json(400, {"error": str(error)})

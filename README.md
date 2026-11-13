@@ -432,6 +432,27 @@ does not store or log patient inputs. `GET /api/health` is a lightweight
 liveness check that does not load the model. Predictions remain educational
 model outputs, not diagnoses.
 
+### Validate batches through the API
+
+```bash
+curl -H "Content-Type: application/json" --data-binary @examples/patient.json \
+  http://127.0.0.1:8765/api/validate
+```
+
+`POST /api/validate` accepts the same patient object or nonempty object array as
+the prediction API, but loads no model and runs no inference. A parsed batch
+returns HTTP 200 with `total_records`, `valid_records`, `invalid_records`, and a
+`records` array containing each 1-based patient number, its `valid` flag, and the
+first validation error for invalid patients. Every patient is checked, including
+when all are invalid; callers should inspect `invalid_records` before predicting.
+The report does not echo patient values or metadata.
+
+Malformed JSON, duplicate keys, empty arrays, or arrays containing non-objects
+return HTTP 400 rather than a row report. The prediction API's 2 MiB limit,
+content-type requirements, local host/origin restrictions, no-store headers, and
+JSON method errors also apply. Validation reports accepted input structure only;
+it does not assess model coverage or medical meaning.
+
 ## Tests
 
 ```bash

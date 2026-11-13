@@ -224,6 +224,44 @@ class WebTests(unittest.TestCase):
                 self.assertEqual(headers["Cache-Control"], "no-store")
                 self.assertEqual(json.loads(body), {"predictions": predict_many(patients), "count": len(patients)})
 
+    def test_validation_api_reports_every_patient_without_loading_model(self):
+        records = [DEFAULT_PATIENT, {**DEFAULT_PATIENT, "Age": 0},
+                   {**DEFAULT_PATIENT, "Sleep Duration": 25}, DEFAULT_PATIENT]
+        with patch("src.predict.joblib.load") as load, patch("src.web.predict_many") as predict_batch:
+            status, headers, body = self.request("POST", "/api/validate", json.dumps(records),
+                                                {"Content-Type": "application/json"})
+        load.assert_not_called()
+        predict_batch.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        report = json.loads(body)
+        self.assertEqual((report["total_records"], report["valid_records"], report["invalid_records"]), (4, 2, 2))
+        self.assertEqual([row["patient"] for row in report["records"] if not row["valid"]], [2, 3])
+        self.assertNotIn("Software Engineer", body)
+
+    def test_validation_api_single_patient_and_all_invalid_batch(self):
+        for records, valid in ((DEFAULT_PATIENT, 1), ([{}, {}], 0)):
+            with self.subTest(records=records):
+                status, _, body = self.request("POST", "/api/validate", json.dumps(records).encode("utf-8-sig"),
+                                               {"Content-Type": "application/json; charset=utf-8"})
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(body)["valid_records"], valid)
+
+    def test_validation_api_rejects_malformed_transport_and_wrong_method(self):
+        cases = [("POST", "[]", {"Content-Type": "application/json"}, 400),
+                 ("POST", '{"Age": 30, "Age": 40}', {"Content-Type": "application/json"}, 400),
+                 ("POST", "{}", {"Content-Type": "text/plain"}, 415),
+                 ("POST", "", {"Content-Type": "application/json", "Content-Length": str(MAX_UPLOAD_BYTES + 1)}, 413),
+                 ("POST", "{}", {"Content-Type": "application/json", "Origin": "https://example.com"}, 403),
+                 ("GET", None, {}, 405)]
+        for method, payload, headers, expected in cases:
+            with self.subTest(method=method, expected=expected):
+                status, response_headers, body = self.request(method, "/api/validate", payload, headers)
+                self.assertEqual(status, expected)
+                self.assertIn("error", json.loads(body))
+                if status == 405:
+                    self.assertEqual(response_headers["Allow"], "POST")
+
     def test_json_api_health_check_does_not_load_the_model(self) -> None:
         with patch("src.predict.joblib.load") as load_model:
             status, _, body = self.request("GET", "/api/health")
