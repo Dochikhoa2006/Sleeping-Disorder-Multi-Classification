@@ -32,6 +32,8 @@ def feature_fingerprints(features: pd.DataFrame) -> pd.Series:
     engineered = SleepFeatureEngineer().transform(features)
     for column in NUMERIC_FEATURES:
         engineered[column] = pd.to_numeric(engineered[column], errors="coerce").astype("float64")
+        # IEEE signed zeros compare equally but have different bitwise hashes.
+        engineered[column] = engineered[column].mask(engineered[column].eq(0), 0.0)
     for column in CATEGORICAL_FEATURES:
         engineered[column] = engineered[column].astype("string")
     return pd.util.hash_pandas_object(engineered, index=False)
