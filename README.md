@@ -997,6 +997,30 @@ latency measurements. A small run count gives limited percentile information;
 background load, caches, hardware, and dependency versions affect results. Compare
 runs under similar conditions rather than treating a single timing as a guarantee.
 
+### Score saved predictions against actual labels
+
+```bash
+python -m src.score_exports --input-csv labeled-predictions.csv \
+  --output scores.json --min-accuracy 0.8 --min-macro-f1 0.7
+```
+
+Evaluate an existing prediction export containing the 11 patient fields,
+`Predicted Sleep Disorder`, and actual labels in `Sleep Disorder`. Both label
+columns must use `Healthy`, `Insomnia`, or `Sleep Apnea`. The command validates
+inputs and computes accuracy, per-class metrics, a confusion matrix, and macro
+F1 over all three classes (absent classes receive zero F1). It never loads a model
+or regenerates predictions. Scores include every exported row, including duplicates.
+
+Optional minimum scores are inclusive and must lie between 0 and 1. A failed
+threshold produces the complete JSON report then exits 1; otherwise valid scoring
+exits 0. Omit `--output` for JSON on standard output. Invalid input preserves an
+existing report, and output cannot overwrite the input or shipped model. The
+report is compatible with `src.evaluation_report` for printable HTML export.
+
+This scores the labels supplied in the file. It does not verify model provenance
+or exclude training overlap; use `src.evaluate` when evaluating a trusted model
+on unseen data. Passing chosen thresholds is not evidence of clinical validity.
+
 ### Merge validated patient batches
 
 ```bash
