@@ -691,8 +691,11 @@ The date identifies the night you went to bed. An earlier wake time is interpret
 as the next morning. `--awake-minutes` is your estimate of total awake time in
 bed, including time to fall asleep; it defaults to zero. Quality is an optional
 personal rating from 1 to 10. Estimated sleep is time in bed minus awake minutes.
-Times use 24-hour `HH:MM`; identical bedtime/wake times are rejected. Calculations
-use wall-clock times and do not adjust for daylight saving or time-zone changes.
+Times use 24-hour `HH:MM`; identical bedtime/wake times are rejected.
+Awake minutes and quality ratings must be integers. The Python write helpers accept
+integers or integer strings, and reject floats and booleans before saving so
+every stored entry can be read back without truncation.
+Calculations use wall-clock times and do not adjust for daylight saving or time-zone changes.
 
 Entries are stored in `data/sleep_diary.csv`, which is excluded from Git. Use
 `python -m src.diary --file /path/to/my-diary.csv ...` for another location.
