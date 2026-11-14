@@ -20,6 +20,16 @@ from src.output import atomic_text_output
 
 
 def classification_metrics(target: pd.Series, predictions: list[str], labels: list[str]) -> dict:
+    if (not isinstance(labels, (list, tuple)) or not labels
+            or any(not isinstance(label, str) or not label.strip() for label in labels)
+            or len(set(labels)) != len(labels)):
+        raise ValueError("Metric labels must be distinct nonempty strings.")
+    actual, predicted = np.asarray(target), np.asarray(predictions)
+    if (actual.ndim != 1 or predicted.ndim != 1 or not len(actual)
+            or len(actual) != len(predicted)):
+        raise ValueError("Metric targets and predictions must be aligned nonempty one-dimensional vectors.")
+    if not np.isin(actual, labels).all() or not np.isin(predicted, labels).all():
+        raise ValueError("Metric targets and predictions must use only the declared class labels.")
     return {
         "accuracy": float(accuracy_score(target, predictions)),
         "macro_f1": float(f1_score(target, predictions, labels=labels, average="macro", zero_division=0)),
