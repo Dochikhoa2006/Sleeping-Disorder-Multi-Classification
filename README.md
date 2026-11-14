@@ -1072,8 +1072,9 @@ python -m src.verify_split --directory split-output --source labeled.csv
 Check a directory produced by `src.split_data`, using its fixed `train.csv`,
 `test.csv`, and `manifest.json` filenames. The read-only verifier recomputes file
 hashes, row counts, unique profile counts, and class distributions. It also checks
-matching columns and independently confirms that normalized profiles do not cross
-the partition boundary. Supplying `--source` checks the original file hash and
+matching columns, consistent labels within equivalent profile groups, and coverage
+of the same present classes on both sides. It independently confirms that
+normalized profiles do not cross the partition boundary. Supplying `--source` checks the original file hash and
 that all original rows appear exactly once across the combined partitions,
 including the multiplicity of duplicate rows and all metadata field values.
 

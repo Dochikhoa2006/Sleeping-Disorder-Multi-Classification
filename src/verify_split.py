@@ -38,11 +38,18 @@ def verify_split(directory: Path, source: Path | None = None) -> dict:
         expected_counts = expected.get("class_counts")
         if isinstance(expected_counts, dict) and any(type(count) is not int for count in expected_counts.values()):
             checks[name]["class_counts"] = False
+        profile_labels = {}
+        for fingerprint, row in zip(fingerprints, rows, strict=True):
+            profile_labels.setdefault(int(fingerprint), set()).add(row[TARGET_COLUMN])
+        checks[name]["consistent_profile_labels"] = all(len(labels) == 1 for labels in profile_labels.values())
         partitions[name] = (columns, rows)
         groups[name] = set(fingerprints)
     checks["matching_columns"] = partitions["train"][0] == partitions["test"][0]
     shared = len(groups["train"] & groups["test"])
     checks["profile_disjoint"] = shared == 0
+    checks["class_coverage"] = (
+        {row[TARGET_COLUMN] for row in partitions["train"][1]}
+        == {row[TARGET_COLUMN] for row in partitions["test"][1]})
     checks["source_hash"] = None
     checks["source_rows_preserved"] = None
     if source is not None:
