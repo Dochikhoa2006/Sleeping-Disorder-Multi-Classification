@@ -32,6 +32,15 @@ def clock_minutes(value: str) -> int:
     return hour * 60 + minute
 
 
+def _diary_integer(value, field: str) -> int:
+    # A float/bool can be truncated by int(), then written as an unreadable CSV value.
+    if type(value) is int:
+        return value
+    if isinstance(value, str) and re.fullmatch(r"[+-]?\d+", value.strip()):
+        return int(value)
+    raise ValueError(f"{field} must be an integer.")
+
+
 def night_metrics(record: dict) -> dict:
     """Calculate wall-clock intervals; no time-zone or DST adjustment is inferred."""
     parse_date(record["date"])
@@ -39,10 +48,10 @@ def night_metrics(record: dict) -> dict:
     minutes = (stop - start) % (24 * 60)
     if not minutes:
         raise ValueError("Bedtime and wake time must differ; intervals must be under 24 hours.")
-    awake = int(record["awake_minutes"])
+    awake = _diary_integer(record["awake_minutes"], "Awake minutes")
     if not 0 <= awake <= minutes:
         raise ValueError("Awake minutes must be between zero and the time in bed.")
-    quality = int(record["quality"]) if record["quality"] != "" else None
+    quality = _diary_integer(record["quality"], "Quality") if record["quality"] != "" else None
     if quality is not None and not 1 <= quality <= 10:
         raise ValueError("Quality must be an integer from 1 to 10.")
     return {"time_in_bed_minutes": minutes, "estimated_sleep_minutes": minutes - awake,

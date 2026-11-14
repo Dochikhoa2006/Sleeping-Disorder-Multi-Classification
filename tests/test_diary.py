@@ -11,6 +11,31 @@ from src.diary import add_night, load_diary, main, night_metrics, summarize, ren
 
 
 class DiaryTests(unittest.TestCase):
+    def test_write_helpers_reject_lossy_integer_values_before_changing_files(self):
+        for field in ("awake_minutes", "quality"):
+            for value in (1.5, 1.0, True, False, float("nan"), float("inf")):
+                with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory) / "diary.csv"
+                    add_night(path, self.night())
+                    original = path.read_bytes()
+                    invalid = self.night(date="2026-11-02", **{field: value})
+                    with self.assertRaisesRegex(ValueError, "must be an integer"):
+                        add_night(path, invalid)
+                    self.assertEqual(path.read_bytes(), original)
+                    with self.assertRaisesRegex(ValueError, "must be an integer"):
+                        merge_nights(path, [invalid])
+                    self.assertEqual(path.read_bytes(), original)
+                    self.assertEqual(len(load_diary(path)), 1)
+
+    def test_integer_values_and_integer_strings_round_trip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "diary.csv"
+            for index, (awake, quality) in enumerate(((30, 8), (" 030 ", "+8"), ("+30", "08")), start=1):
+                add_night(path, self.night(date=f"2026-11-0{index}", awake_minutes=awake, quality=quality))
+            for row in load_diary(path):
+                self.assertEqual(night_metrics(row)["estimated_sleep_minutes"], 450)
+                self.assertEqual(night_metrics(row)["quality"], 8)
+
     def night(self, **changes):
         return {"date": "2026-11-01", "bedtime": "23:00", "wake_time": "07:00",
                 "awake_minutes": "30", "quality": "8", **changes}
