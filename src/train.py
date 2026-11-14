@@ -86,7 +86,7 @@ def split_training_holdout(
     features: pd.DataFrame, target: pd.Series
 ) -> tuple[np.ndarray, np.ndarray]:
     """Reserve one stratified, group-disjoint fold before model selection."""
-    groups = make_feature_groups(features)
+    groups = validated_training_groups(features, target)
     splitter = StratifiedGroupKFold(
         n_splits=5, shuffle=True, random_state=RANDOM_STATE
     )
@@ -98,15 +98,26 @@ def split_training_holdout(
     return train_indices, holdout_indices
 
 
+def validated_training_groups(features: pd.DataFrame, target: pd.Series) -> pd.Series:
+    """Reject contradictory targets before splitting or selecting a model."""
+    groups = make_feature_groups(features)
+    profiles = pd.DataFrame({"group": groups.to_numpy(), "label": target.to_numpy()})
+    conflicts = int(profiles.groupby("group")["label"].nunique().gt(1).sum())
+    if conflicts:
+        raise ValueError(f"Found {conflicts} equivalent patient profile(s) with conflicting labels. "
+                         "Review the data with src.label_audit before training.")
+    return groups
+
+
 def compare_models(
     features: pd.DataFrame, target: pd.Series
 ) -> tuple[dict[str, dict[str, float]], str]:
+    groups = validated_training_groups(features, target)
     cross_validation = StratifiedGroupKFold(
         n_splits=5,
         shuffle=True,
         random_state=RANDOM_STATE,
     )
-    groups = make_feature_groups(features)
     results: dict[str, dict[str, float]] = {}
     macro_f1 = make_scorer(
         f1_score, labels=sorted(set(target)), average="macro", zero_division=0, pos_label=None,

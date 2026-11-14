@@ -14,6 +14,39 @@ from src.train import compare_models, load_training_data, main, make_feature_gro
 
 
 class TrainingTests(unittest.TestCase):
+    def test_conflicting_normalized_profiles_fail_before_split_or_model_selection(self):
+        features, target = self.comparison_data()
+        duplicate = features.iloc[[0]].copy()
+        duplicate["BMI Category"] = " Normal Weight "
+        duplicate["Blood Pressure"] = " 120 / 80 "
+        features = pd.concat([features, duplicate], ignore_index=True)
+        target = pd.concat([target, pd.Series(["Insomnia"])], ignore_index=True)
+        for operation in (split_training_holdout, compare_models):
+            with self.subTest(operation=operation.__name__), \
+                    patch("src.train.StratifiedGroupKFold") as splitter, \
+                    patch("src.train.cross_validate") as fit:
+                with self.assertRaisesRegex(ValueError, "conflicting labels.*src.label_audit"):
+                    operation(features, target)
+                splitter.assert_not_called()
+                fit.assert_not_called()
+
+    def test_conflicting_training_cli_preserves_existing_artifacts(self):
+        features, target = self.comparison_data()
+        rows = features.iloc[[0, 0]].copy()
+        rows["Sleep Disorder"] = ["Healthy", "Insomnia"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "patients.csv"
+            rows.to_csv(source, index=False)
+            paths = [root / name for name in ("model.joblib", "plot.png", "report.json")]
+            for path in paths:
+                path.write_bytes(b"existing")
+            args = ["train", "--data", str(source), "--model-output", str(paths[0]),
+                    "--report-output", str(paths[1]), "--evaluation-output", str(paths[2])]
+            with patch("sys.argv", args), self.assertRaisesRegex(SystemExit, "Error:.*conflicting labels"):
+                main()
+            self.assertTrue(all(path.read_bytes() == b"existing" for path in paths))
+
     def test_fold_macro_f1_keeps_classes_missing_from_validation(self) -> None:
         features, target = self.comparison_data()
         # Validation contains only Healthy, while training contains all classes.
