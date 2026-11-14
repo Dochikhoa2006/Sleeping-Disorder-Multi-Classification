@@ -6,6 +6,8 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from unittest.mock import Mock
+from types import SimpleNamespace
 
 import joblib
 from sklearn.dummy import DummyClassifier
@@ -15,6 +17,35 @@ from src.predict import DEFAULT_MODEL_PATH
 
 
 class CompareModelsTests(unittest.TestCase):
+    def test_regressors_and_invalid_class_schemas_are_rejected_before_prediction(self):
+        for classes in (None, [], [["Healthy"]], ["Healthy", "Healthy"]):
+            model = SimpleNamespace(predict=Mock(return_value=["Healthy"]))
+            if classes is not None:
+                model.classes_ = classes
+            with self.subTest(classes=classes), patch("src.compare_models.joblib.load", return_value=model):
+                with self.assertRaises(ValueError):
+                    compare_models([self.patient], DEFAULT_MODEL_PATH, DEFAULT_MODEL_PATH)
+                model.predict.assert_not_called()
+
+    def test_invalid_prediction_shapes_and_unknown_labels_rejected(self):
+        for predictions in ("Healthy", [["Healthy"]], [], ["Unknown"], ["Healthy", "Healthy"]):
+            model = SimpleNamespace(classes_=["Healthy"], predict=Mock(return_value=predictions))
+            with self.subTest(predictions=predictions), patch("src.compare_models.joblib.load", return_value=model):
+                with self.assertRaises(ValueError):
+                    compare_models([self.patient], DEFAULT_MODEL_PATH, DEFAULT_MODEL_PATH)
+
+    def test_invalid_model_output_does_not_replace_cli_report(self):
+        model = SimpleNamespace(classes_=["Healthy"], predict=Mock(return_value=["Unknown"]))
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "comparison.json"
+            output.write_text("existing report")
+            args = ["compare", "--baseline", str(DEFAULT_MODEL_PATH), "--candidate", str(DEFAULT_MODEL_PATH),
+                    "--input-json", "examples/patient.json", "--output", str(output)]
+            with patch("sys.argv", args), patch("src.compare_models.joblib.load", return_value=model):
+                with self.assertRaisesRegex(SystemExit, "declared class labels"):
+                    main()
+            self.assertEqual(output.read_text(), "existing report")
+
     def setUp(self):
         self.patient = json.loads(Path('examples/patient.json').read_text())
 

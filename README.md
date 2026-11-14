@@ -664,6 +664,11 @@ input or model paths. All patient records are validated before loading models.
 
 `--fail-on-change` exits with status 1 if any prediction differs, after writing
 the complete report; omit it to report differences without failing a workflow.
+Both artifacts must be fitted classifiers exposing distinct class labels. Each
+must return a one-dimensional prediction array with exactly one declared class
+per patient. Regressors, malformed outputs, and unknown labels are rejected
+without replacing an existing comparison report.
+
 Agreement measures consistency between versions, not accuracy: this command does
 not use ground-truth labels or establish that either model is better. Only load
 trusted joblib artifacts, as loading one can execute Python code.

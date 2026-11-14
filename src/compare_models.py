@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 
 from src.output import atomic_text_output
@@ -27,9 +28,18 @@ def compare_models(patients: list[dict], baseline: Path, candidate: Path) -> dic
     for path in (baseline, candidate):
         snapshot = path.read_bytes()
         model = joblib.load(BytesIO(snapshot))
-        labels = [str(label) for label in model.predict(frame.copy())]
-        if len(labels) != len(patients):
-            raise ValueError("Each model must return exactly one prediction per patient.")
+        classes = np.asarray(getattr(model, "classes_", []))
+        if classes.ndim != 1 or not len(classes):
+            raise ValueError("Each model must be a fitted classifier with a one-dimensional class list.")
+        known = [str(label) for label in classes]
+        if len(set(known)) != len(known):
+            raise ValueError("Each model must expose distinct class labels.")
+        values = np.asarray(model.predict(frame.copy()))
+        if values.ndim != 1 or len(values) != len(patients):
+            raise ValueError("Each model must return exactly one prediction per patient in a one-dimensional array.")
+        labels = [str(label) for label in values]
+        if any(label not in known for label in labels):
+            raise ValueError("Each model must predict only its declared class labels.")
         predictions.append(labels)
         hashes.append(hashlib.sha256(snapshot).hexdigest())
     first, second = predictions
