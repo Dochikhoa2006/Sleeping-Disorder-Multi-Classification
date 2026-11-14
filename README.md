@@ -157,6 +157,11 @@ Training requires at least one row and a `Sleep Disorder` column. Non-missing
 labels must be exactly `Healthy`, `Insomnia`, or `Sleep Apnea`; unsupported
 labels (including typos) are rejected before model selection or artifact
 writes. Missing labels continue to be interpreted as `Healthy`.
+After feature normalization, equivalent profiles must have consistent labels.
+Conflicts stop training before holdout splitting or model selection and leave
+existing artifacts intact. Use `python -m src.label_audit --input-csv data.csv`
+to locate conflicting groups; review the source rather than choosing labels
+automatically.
 
 Model comparison stops if a cross-validation fold fails or returns a
 non-finite score, so incomplete validation results cannot select the saved
