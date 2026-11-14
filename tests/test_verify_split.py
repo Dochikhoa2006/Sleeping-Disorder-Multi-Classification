@@ -62,6 +62,30 @@ class VerifySplitTests(unittest.TestCase):
         self.assertTrue(report["checks"]["source_hash"])
         self.assertFalse(report["checks"]["source_rows_preserved"])
 
+    def test_conflicting_profile_labels_fail_even_with_matching_manifest(self):
+        path = self.root / "train.csv"
+        path.write_bytes(path.read_bytes().replace(b"Healthy", b"Insomnia", 1))
+        self.manifest["partitions"]["train"]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        self.manifest["partitions"]["train"]["class_counts"] = {"Healthy": 1, "Insomnia": 1}
+        self.save_manifest()
+        report = verify_split(self.root)
+        self.assertTrue(report["checks"]["train"]["sha256"])
+        self.assertTrue(report["checks"]["train"]["class_counts"])
+        self.assertFalse(report["checks"]["train"]["consistent_profile_labels"])
+        self.assertFalse(report["verified"])
+
+    def test_class_coverage_fails_even_with_matching_manifest(self):
+        path = self.root / "test.csv"
+        path.write_bytes(path.read_bytes().replace(b"Healthy", b"Insomnia"))
+        self.manifest["partitions"]["test"]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        self.manifest["partitions"]["test"]["class_counts"] = {"Insomnia": 1}
+        self.save_manifest()
+        report = verify_split(self.root)
+        self.assertTrue(report["checks"]["profile_disjoint"])
+        self.assertTrue(report["checks"]["test"]["consistent_profile_labels"])
+        self.assertFalse(report["checks"]["class_coverage"])
+        self.assertFalse(report["verified"])
+
     def test_manifest_count_mismatch_and_malformed_manifest(self):
         self.manifest["partitions"]["train"]["rows"] = 3
         self.save_manifest()
