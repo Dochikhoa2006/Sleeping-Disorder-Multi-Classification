@@ -221,6 +221,10 @@ write preserves any existing report and removes the temporary file.
 
 Gzip-compressed CSVs are also accepted with `--data external_patients.csv.gz`.
 The dataset fingerprint identifies the original compressed file contents.
+Before loading the model, evaluation rejects duplicate or blank column names,
+records with missing or extra fields, invalid UTF-8, and broken CSV quoting.
+Empty lines, quoted commas, and multiline fields remain supported. This prevents the CSV
+reader from silently renaming columns or inferring an unintended row index.
 
 The JSON report contains accuracy, macro F1, per-class precision and recall,
 and a confusion matrix. The `dataset_sha256` and `model_sha256` fields identify

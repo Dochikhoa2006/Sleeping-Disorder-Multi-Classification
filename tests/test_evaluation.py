@@ -19,6 +19,38 @@ from src.train import DEFAULT_MODEL_PATH
 
 
 class ExternalEvaluationTests(unittest.TestCase):
+    def test_ambiguous_csv_structure_rejected_before_model_loading(self):
+        cases = [b"Age,Age,Sleep Disorder\n30,40,Healthy\n",
+                 b"Age,,Sleep Disorder\n30,x,Healthy\n",
+                 b"Age,Sleep Disorder\n30,Healthy,extra\n",
+                 b"Age,Sleep Disorder\n30\n",
+                 b'Age,Sleep Disorder\n30,"unterminated',
+                 b"Age,Sleep Disorder\n30,\xff\n"]
+        for payload in cases:
+            for compressed in (False, True):
+                content = gzip.compress(payload) if compressed else payload
+                with self.subTest(payload=payload, compressed=compressed), \
+                        patch("src.evaluation.joblib.load") as load:
+                    with self.assertRaisesRegex(ValueError, "Evaluation CSV"):
+                        evaluate_bytes(content, DEFAULT_MODEL_PATH, compressed=compressed)
+                    load.assert_not_called()
+
+    def test_quoted_multiline_metadata_remains_valid(self):
+        row = {**self.new_patient(97), TARGET_COLUMN: "Healthy", "Notes": 'comma, quote " and\nnewline'}
+        payload = pd.DataFrame([row]).to_csv(index=False).encode("utf-8-sig")
+        self.assertEqual(evaluate_bytes(payload, DEFAULT_MODEL_PATH)["evaluated_rows"], 1)
+
+    def test_malformed_structure_preserves_existing_cli_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "bad.csv"
+            output = Path(directory) / "report.json"
+            source.write_text("Age,Age,Sleep Disorder\n30,40,Healthy\n")
+            output.write_text("existing report")
+            with patch("sys.argv", ["evaluate", "--data", str(source), "--output", str(output)]):
+                with self.assertRaisesRegex(SystemExit, "unique and non-empty"):
+                    main()
+            self.assertEqual(output.read_text(), "existing report")
+
     def test_optional_row_diagnostics_align_predictions_and_excluded_records(self) -> None:
         rows = [{**self.new_patient(96), TARGET_COLUMN: "Insomnia"},
                 {**self.new_patient(97), TARGET_COLUMN: "Healthy"},

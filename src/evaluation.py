@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import gzip
+import csv
 import hashlib
 import json
 import zlib
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 
 import joblib
@@ -144,10 +145,6 @@ def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool =
     """Evaluate CSV bytes in memory using the same rules as file evaluation."""
     validate_bootstrap_options(bootstrap_runs, bootstrap_seed)
     group_by = validate_group_options(group_by, min_group_rows)
-    model_bytes = model_path.read_bytes()
-    pipeline = joblib.load(BytesIO(model_bytes))
-    if not hasattr(pipeline, "training_feature_hashes_"):
-        raise ValueError("Model lacks training fingerprints; retrain it before external evaluation.")
     if compressed:
         try:
             csv_bytes = gzip.decompress(dataset_bytes)
@@ -155,11 +152,29 @@ def evaluate_bytes(dataset_bytes: bytes, model_path: Path, *, compressed: bool =
             raise ValueError("Evaluation gzip input is invalid or truncated.") from error
     else:
         csv_bytes = dataset_bytes
+    # pandas can rename duplicate headers or infer an index from over-wide rows.
+    # Validate structure first so those repairs cannot change what gets scored.
+    try:
+        reader = csv.reader(StringIO(csv_bytes.decode("utf-8-sig"), newline=""), strict=True)
+        columns = next(reader, None)
+        if not columns or any(not column.strip() for column in columns) or len(set(columns)) != len(columns):
+            raise ValueError("Evaluation CSV headers must be unique and non-empty.")
+        for number, values in enumerate(reader, start=2):
+            if not values:  # Preserve pandas' established empty-line handling.
+                continue
+            if len(values) != len(columns):
+                raise ValueError(f"Evaluation CSV record {number}: expected {len(columns)} fields, got {len(values)}.")
+    except (csv.Error, UnicodeError) as error:
+        raise ValueError("Evaluation CSV must be well-formed UTF-8 CSV.") from error
     dataset = pd.read_csv(BytesIO(csv_bytes))
     if dataset.empty:
         raise ValueError("Evaluation CSV must contain at least one row.")
     if TARGET_COLUMN not in dataset:
         raise ValueError(f"Evaluation CSV must contain '{TARGET_COLUMN}'.")
+    model_bytes = model_path.read_bytes()
+    pipeline = joblib.load(BytesIO(model_bytes))
+    if not hasattr(pipeline, "training_feature_hashes_"):
+        raise ValueError("Model lacks training fingerprints; retrain it before external evaluation.")
     target = dataset[TARGET_COLUMN]
     labels = [str(label) for label in pipeline.classes_]
     if target.isna().any() or not target.isin(labels).all():
