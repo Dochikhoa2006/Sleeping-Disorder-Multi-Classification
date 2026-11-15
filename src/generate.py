@@ -19,10 +19,12 @@ COLUMNS = ["Record ID", "Data Source", *RAW_FEATURES]
 def generate_patients(rows: int = 100, seed: int = RANDOM_STATE,
                       *, edge_cases: bool = False) -> list[dict]:
     """Create input-valid fixtures, without modeling real population relationships."""
-    if not 1 <= rows <= 10000:
+    if type(rows) is not int or not 1 <= rows <= 10000:
         raise ValueError("Choose between 1 and 10000 rows.")
-    if not 0 <= seed <= 2**32 - 1:
+    if type(seed) is not int or not 0 <= seed <= 2**32 - 1:
         raise ValueError("Seed must be between 0 and 4294967295.")
+    if type(edge_cases) is not bool:
+        raise ValueError("Edge cases must be a boolean flag.")
     if edge_cases and rows < 2:
         raise ValueError("Edge cases require at least two rows.")
     rng = random.Random(seed)
