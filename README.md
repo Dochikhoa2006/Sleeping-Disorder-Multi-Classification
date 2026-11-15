@@ -916,6 +916,8 @@ and a `Data Source` column marking every record as synthetic. Choose CSV or JSON
 omit `--output` (or use `-`) for clean standard output. File output is atomic.
 The same row count, seed, and options produce repeatable fixtures under the same
 Python version, without loading a model or reading any personal records.
+Direct Python calls require integer row counts and seeds, plus a boolean
+`edge_cases` flag; invalid types are rejected before initializing the generator.
 
 `--edge-cases` replaces the first two rows with valid minimum/maximum numeric
 input boundaries, requiring at least two rows. These are software test fixtures,

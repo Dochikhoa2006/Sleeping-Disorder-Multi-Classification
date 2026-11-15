@@ -11,6 +11,21 @@ from src.predict import DEFAULT_MODEL_PATH, read_patient_csv, read_patient_json,
 
 
 class GenerateTests(unittest.TestCase):
+    def test_invalid_python_option_types_fail_before_random_generation(self):
+        options = [{"rows": value} for value in (True, 1.5, "2", None)]
+        options += [{"seed": value} for value in (True, 1.5, "42", None)]
+        options += [{"edge_cases": value} for value in (1, "false", None)]
+        for arguments in options:
+            with self.subTest(arguments=arguments), patch("src.generate.random.Random") as random_source:
+                with self.assertRaises(ValueError):
+                    generate_patients(**arguments)
+                random_source.assert_not_called()
+
+    def test_valid_integer_boundaries_remain_reproducible(self):
+        self.assertEqual(generate_patients(1, 0), generate_patients(1, 0))
+        self.assertEqual(generate_patients(2, 2**32 - 1, edge_cases=True),
+                         generate_patients(2, 2**32 - 1, edge_cases=True))
+
     def test_seed_is_repeatable_and_does_not_load_a_model(self):
         with patch('src.predict.joblib.load') as load:
             first = generate_patients(100, 42)
