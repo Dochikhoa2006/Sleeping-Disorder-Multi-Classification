@@ -1238,6 +1238,8 @@ choosing a majority label. Consistent labels alone do not establish correctness.
 ```bash
 python -m src.convert --input-json examples/patient.json --to csv --output patients.csv
 python -m src.convert --input-csv patients.csv --to json --output patients.json
+python -m src.convert --input-csv patients.csv --to jsonl --output patients.jsonl
+python -m src.convert --input-jsonl patients.jsonl --to csv --output restored.csv
 cat examples/patient.json | python -m src.convert --input-json - --to csv
 ```
 
@@ -1248,6 +1250,13 @@ standard order; extra columns such as IDs, notes, labels, and source markers are
 discarded. JSON output is always an array, and numeric fields become JSON numbers.
 Category text and blood-pressure formatting are retained; this command does not
 apply the model's category normalization. CSV quoting handles commas and quotes.
+
+JSON Lines (`jsonl`) uses one patient object per physical line. Arrays, blank
+lines, duplicate keys, and invalid records are rejected with a line number; a
+final newline and CRLF input are supported. Exports escape embedded newlines
+within strings, retain Unicode, and project the same 11 fields. JSON Lines
+conversion validates the entire in-memory batch before publishing any output;
+it is not a streaming inference interface. Use `--input-jsonl -` for standard input.
 
 Omit `--output` or use `--output -` to write only the converted data to standard
 output. Use `-` with either input option to read standard input. File exports are

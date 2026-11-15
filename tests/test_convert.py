@@ -14,6 +14,37 @@ from src.preprocessing import RAW_FEATURES
 
 
 class ConversionTests(unittest.TestCase):
+    def test_json_lines_round_trip_preserves_order_unicode_and_embedded_newlines(self):
+        rows = [self.patient, {**self.patient, "Age": 40, "Occupation": "Ingénieur\nNight\u2028shift"}]
+        payload = convert_text(json.dumps(rows), "json", "jsonl")
+        self.assertEqual(payload.count("\n"), 2)
+        restored = json.loads(convert_text("\ufeff" + payload, "jsonl", "json"))
+        self.assertEqual(restored, rows)
+        csv_payload = convert_text(payload.replace("\n", "\r\n"), "jsonl", "csv")
+        self.assertEqual(len(read_patient_csv(StringIO(csv_payload))[1]), 2)
+
+    def test_invalid_json_lines_include_physical_line_number(self):
+        valid = json.dumps(self.patient)
+        for bad in ('{"Age": 30, "Age": 40}', "[]", "null", "", "{}", "not json"):
+            with self.subTest(bad=bad), self.assertRaisesRegex(ValueError, "JSON Lines line 2"):
+                convert_text(valid + "\n" + bad + "\n", "jsonl", "csv")
+        with self.assertRaises(ValueError):
+            convert_text("", "jsonl", "json")
+
+    def test_json_lines_cli_pipeline_and_atomic_failure(self):
+        payload = json.dumps(self.patient) + "\n"
+        command = [sys.executable, "-m", "src.convert", "--input-jsonl", "-", "--to", "jsonl"]
+        result = subprocess.run(command, input=payload, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), self.patient)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "patients.jsonl"
+            output.write_text("previous export")
+            result = subprocess.run([*command, "--output", str(output)], input=payload + "{}\n", capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("line 2", result.stderr)
+            self.assertEqual(output.read_text(), "previous export")
+
     def setUp(self):
         self.patient = json.loads(Path("examples/patient.json").read_text())
 
