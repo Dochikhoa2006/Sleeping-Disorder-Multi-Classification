@@ -1047,7 +1047,10 @@ calls, output validation, and JSON export. Each batch size gets its own warmups.
 
 The report records the model hash, seed, UTC timestamp, Python/dependency versions,
 and system architecture. Choose up to 10 distinct batch sizes from 1 to 10,000,
-1–100 measured runs, and 0–10 warmups. Omit `--output` for JSON on standard output.
+1–100 measured runs, and 0–10 warmups. Counts and seeds must be integers (booleans
+and fractions are rejected), and seeds must be between 0 and 4294967295. Invalid
+options fail before synthetic generation or model access, including when calling
+the Python function directly. Omit `--output` for JSON on standard output.
 File output is atomic and cannot replace the model. No patient data is read.
 
 These are local measurements on synthetic inputs, not accuracy tests or HTTP

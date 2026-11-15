@@ -25,11 +25,13 @@ from src.preprocessing import RANDOM_STATE, RAW_FEATURES
 def benchmark_model(model_path: Path = DEFAULT_MODEL_PATH, *, batch_sizes=(1, 10, 100),
                     runs: int = 10, warmup: int = 2, seed: int = RANDOM_STATE) -> dict:
     sizes = list(batch_sizes)
-    if not sizes or len(sizes) > 10 or len(set(sizes)) != len(sizes) or any(
-            not isinstance(size, int) or isinstance(size, bool) or not 1 <= size <= 10000 for size in sizes):
+    if not sizes or len(sizes) > 10 or any(
+            type(size) is not int or not 1 <= size <= 10000 for size in sizes) or len(set(sizes)) != len(sizes):
         raise ValueError("Choose 1–10 distinct integer batch sizes, each between 1 and 10000.")
-    if not 1 <= runs <= 100 or not 0 <= warmup <= 10:
+    if type(runs) is not int or type(warmup) is not int or not 1 <= runs <= 100 or not 0 <= warmup <= 10:
         raise ValueError("Choose 1–100 measured runs and 0–10 warmup runs per batch size.")
+    if type(seed) is not int or not 0 <= seed <= 2**32 - 1:
+        raise ValueError("Seed must be an integer from 0 to 4294967295.")
     patients = generate_patients(max(sizes), seed)
     frames = {size: pd.DataFrame(patients[:size])[RAW_FEATURES] for size in sizes}
     started = perf_counter()

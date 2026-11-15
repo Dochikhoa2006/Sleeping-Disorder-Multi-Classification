@@ -12,6 +12,26 @@ from src.predict import DEFAULT_MODEL_PATH
 
 
 class BenchmarkTests(unittest.TestCase):
+    def test_invalid_types_rejected_before_generation_or_model_access(self):
+        options = [{"runs": value} for value in (True, 1.5, "2", None)]
+        options += [{"warmup": value} for value in (False, .5, "0", None)]
+        options += [{"seed": value} for value in (True, 1.5, "150", None, 2**32)]
+        options += [{"batch_sizes": values} for values in ([True], [1.5], ["1"], [[]], [{}])]
+        for values in options:
+            with self.subTest(values=values), patch("src.benchmark.generate_patients") as generate, \
+                    patch.object(Path, "read_bytes") as read, patch("src.benchmark.joblib.load") as load:
+                with self.assertRaises(ValueError):
+                    benchmark_model(**values)
+                generate.assert_not_called()
+                read.assert_not_called()
+                load.assert_not_called()
+
+    def test_boundary_controls_and_batch_size_generator_remain_supported(self):
+        report = benchmark_model(batch_sizes=(size for size in (1, 2)), runs=1, warmup=0, seed=2**32 - 1)
+        self.assertEqual(report["seed"], 2**32 - 1)
+        self.assertEqual([batch["rows"] for batch in report["batches"]], [1, 2])
+        self.assertTrue(all(len(batch["samples_ms"]) == 1 for batch in report["batches"]))
+
     def test_metrics_use_measured_calls_and_exclude_warmup(self):
         with tempfile.TemporaryDirectory() as directory:
             model_path = Path(directory) / 'model.joblib'
