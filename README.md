@@ -472,7 +472,10 @@ python -m unittest discover -s tests -v
 ```
 
 GitHub Actions runs the same test command with Python 3.11, 3.12, and 3.13 for
-every push and pull request. Each version runs independently, so a failure on
+every pull request and push to `main`. Feature-branch pushes are checked through
+their pull request, avoiding duplicate full suites. New commits to a pull request
+cancel its outdated CI run; runs for `main` are not canceled by this setting.
+Each version runs independently, so a failure on
 one version does not cancel the other checks.
 Each version also runs the included JSON and CSV prediction examples and
 exports the saved model's feature schema to check the documented workflows.
