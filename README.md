@@ -227,7 +227,10 @@ Empty lines, quoted commas, and multiline fields remain supported. This prevents
 reader from silently renaming columns or inferring an unintended row index.
 
 The JSON report contains accuracy, macro F1, per-class precision and recall,
-and a confusion matrix. The `dataset_sha256` and `model_sha256` fields identify
+and a confusion matrix. Scoring rejects empty or misaligned vectors and labels
+outside the declared class list, so every evaluated row is represented in the
+matrix. Invalid model outputs do not replace an existing report.
+The `dataset_sha256` and `model_sha256` fields identify
 the exact CSV and model file contents used, so reports can be traced to their
 inputs even when filenames are reused. It also counts rows whose engineered
 features match a profile used to fit the model. Those rows are excluded from
