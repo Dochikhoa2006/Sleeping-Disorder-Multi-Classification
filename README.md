@@ -711,6 +711,23 @@ ending today. No diary data is sent anywhere. These are self-reported estimates,
 not measurements or a medical assessment. This is a local, single-writer tool;
 avoid simultaneous edits from multiple processes.
 
+### Compare recorded sleep by weekday
+
+```bash
+python -S -m src.diary weekdays --end 2026-11-15 --days 28
+```
+
+Group diary entries by the weekday of their bedtime date, ordered Monday through
+Sunday. The read-only JSON report gives each weekday's possible, recorded,
+missing, and rated-night counts, plus average estimated sleep hours and quality.
+Missing entries are excluded from means, and quality uses rated nights only;
+averages without observations are `null`. All seven weekdays appear even when
+the selected 1–366 day window covers only part of a week. The default is 28 days
+ending today, and no ML packages are required.
+
+These are descriptive self-reported estimates. Sparse or unequal weekday coverage
+can affect comparisons; the report does not infer causes or assign health scores.
+
 ### Preview differences between diary backups
 
 ```bash

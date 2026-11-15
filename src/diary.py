@@ -161,6 +161,29 @@ def summarize(records: list[dict], end: date, days: int = 7) -> dict:
             "nights": nights}
 
 
+def weekday_summary(records: list[dict], end: date, days: int = 28) -> dict:
+    """Describe bedtime-date weekdays without treating missing entries as zero."""
+    if type(days) is not int or not 1 <= days <= 366:
+        raise ValueError("Choose a weekday period from 1 to 366 days.")
+    report = summarize(records, end, days)
+    nights = report.pop("nights")
+    if len({night["date"] for night in nights}) != len(nights):
+        raise ValueError("Duplicate night date.")
+    start = parse_date(report["start_date"])
+    weekdays = []
+    for index, name in enumerate(("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")):
+        selected = [night for night in nights if parse_date(night["date"]).weekday() == index]
+        possible = sum((start + timedelta(days=offset)).weekday() == index for offset in range(days))
+        quality = [night["quality"] for night in selected if night["quality"] is not None]
+        weekdays.append({"weekday": name, "possible_nights": possible, "recorded_nights": len(selected),
+                         "unrecorded_nights": possible - len(selected), "rated_nights": len(quality),
+                         "average_estimated_sleep_hours": sum(n["estimated_sleep_minutes"] for n in selected) / len(selected) / 60
+                                                          if selected else None,
+                         "average_quality": sum(quality) / len(quality) if quality else None})
+    return {"start_date": report["start_date"], "end_date": report["end_date"],
+            "recorded_nights": len(nights), "unrecorded_nights": days - len(nights), "weekdays": weekdays}
+
+
 def compare_periods(records: list[dict], end: date, days: int = 7) -> dict:
     """Compare adjacent equal windows using recorded nights only."""
     if type(days) is not int or not 1 <= days <= 366:
@@ -239,6 +262,9 @@ def main() -> None:
     regularity = commands.add_parser("regularity", help="Describe clock-time changes between consecutive nights.")
     regularity.add_argument("--end", default=date.today().isoformat())
     regularity.add_argument("--days", type=int, default=14)
+    weekdays = commands.add_parser("weekdays", help="Summarize recorded sleep by bedtime-date weekday.")
+    weekdays.add_argument("--end", default=date.today().isoformat())
+    weekdays.add_argument("--days", type=int, default=28)
     export = commands.add_parser("export-calendar", help="Save diary nights as an iCalendar .ics file.")
     export.add_argument("--output", type=Path, required=True)
     restore = commands.add_parser("import", help="Merge a diary CSV backup into the local diary.")
@@ -254,6 +280,9 @@ def main() -> None:
                       "quality": str(args.quality) if args.quality is not None else ""}
             add_night(args.file, record, replace=args.replace)
             print(f"Saved night {args.date} to {args.file}")
+        elif args.command == "weekdays":
+            print(json.dumps(weekday_summary(load_diary(args.file), parse_date(args.end), args.days),
+                             indent=2, allow_nan=False))
         elif args.command == "regularity":
             from src.regularity import schedule_regularity
             print(json.dumps(schedule_regularity(load_diary(args.file), parse_date(args.end), args.days),
