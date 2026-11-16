@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 
 from src.output import atomic_text_output
@@ -37,15 +38,24 @@ def create_receipt_from_bytes(patients: list[dict], snapshot: bytes) -> dict:
     validate_patients(patients)
     fingerprints = [input_fingerprint(patient) for patient in patients]
     model = joblib.load(BytesIO(snapshot))
-    if not hasattr(model, "classes_"):
+    classes = np.asarray(getattr(model, "classes_", []))
+    if classes.ndim != 1 or not len(classes):
         raise ValueError("Model must be a fitted classifier with class labels.")
-    labels = [str(label) for label in model.classes_]
+    labels = [str(label) for label in classes]
+    if any(not label.strip() for label in labels) or len(set(labels)) != len(labels):
+        raise ValueError("Model class labels must be distinct nonempty strings.")
+    name = getattr(model, "model_name_", type(model).__name__)
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Model name must be a nonempty string.")
     frame = pd.DataFrame([{key: patient[key] for key in RAW_FEATURES} for patient in patients])
-    predictions = [str(label) for label in model.predict(frame)]
-    if len(predictions) != len(patients) or any(label not in labels for label in predictions):
+    values = np.asarray(model.predict(frame))
+    if values.ndim != 1 or len(values) != len(patients):
+        raise ValueError("Model must return one known class label per patient.")
+    predictions = [str(label) for label in values]
+    if any(label not in labels for label in predictions):
         raise ValueError("Model must return one known class label per patient.")
     return {"schema_version": 1, "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "model": {"name": getattr(model, "model_name_", type(model).__name__),
+            "model": {"name": name,
                       "sha256": hashlib.sha256(snapshot).hexdigest(), "labels": labels},
             "count": len(patients),
             "predictions": [{"patient": index, "input_sha256": fingerprint, "prediction": prediction}

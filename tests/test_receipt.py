@@ -5,15 +5,46 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 import joblib
 
 from src.predict import DEFAULT_MODEL_PATH, predict_many
-from src.receipt import create_receipt, input_fingerprint, main
+from src.receipt import create_receipt, create_receipt_from_bytes, input_fingerprint, main
+from src.verify_receipt import validate_receipt
 
 
 class ReceiptTests(unittest.TestCase):
+    def test_invalid_model_metadata_rejected_before_prediction(self):
+        options = [{"classes_": classes} for classes in ([], [["Healthy"]], ["Healthy", "Healthy"], [""])]
+        options += [{"model_name_": name} for name in ("", "  ", None, 42)]
+        for changes in options:
+            model = SimpleNamespace(**{"classes_": ["Healthy"], "model_name_": "Fixture", "predict": Mock(return_value=["Healthy"]), **changes})
+            with self.subTest(changes=changes), patch("src.receipt.joblib.load", return_value=model):
+                with self.assertRaises(ValueError):
+                    create_receipt_from_bytes([self.patient], b"snapshot")
+                model.predict.assert_not_called()
+
+    def test_receipt_output_satisfies_verifier_schema_and_rejects_invalid_shapes(self):
+        validate_receipt(create_receipt([self.patient]))
+        for predictions in ("Healthy", [["Healthy"]], [], ["Unknown"]):
+            model = SimpleNamespace(classes_=["Healthy"], model_name_="Fixture", predict=Mock(return_value=predictions))
+            with self.subTest(predictions=predictions), patch("src.receipt.joblib.load", return_value=model):
+                with self.assertRaisesRegex(ValueError, "one known class label"):
+                    create_receipt_from_bytes([self.patient], b"snapshot")
+
+    def test_invalid_model_metadata_preserves_existing_cli_receipt(self):
+        model = SimpleNamespace(classes_=["Healthy", "Healthy"], predict=Mock(return_value=["Healthy"]))
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "receipt.json"
+            output.write_text("existing receipt")
+            with patch("sys.argv", ["receipt", "--input-json", "examples/patient.json", "--output", str(output)]), \
+                    patch("src.receipt.joblib.load", return_value=model):
+                with self.assertRaisesRegex(SystemExit, "distinct nonempty"):
+                    main()
+            self.assertEqual(output.read_text(), "existing receipt")
+
     def setUp(self):
         self.patient = json.loads(Path('examples/patient.json').read_text())
 

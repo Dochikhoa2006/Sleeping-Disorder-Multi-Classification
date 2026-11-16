@@ -1385,6 +1385,9 @@ profile equivalence. The receipt still contains predicted classes and fingerprin
 a fingerprint is not encryption or a guarantee of anonymity.
 
 Inputs are validated before model loading. CLI receipts accept CSV or JSON inputs,
+and require a nonblank model name and distinct nonblank class labels before
+inference. Malformed prediction shapes and unknown labels are rejected before
+publishing a receipt, preserving any existing output. CLI receipts
 write atomically, and cannot replace the input or model. Omit `--output` for JSON
 on standard output. Receipts are provenance records, not digital signatures or
 proof of accuracy; keep the original inputs separately if you need to reproduce
