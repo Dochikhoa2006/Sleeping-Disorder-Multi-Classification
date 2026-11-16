@@ -21,7 +21,7 @@ from threading import Lock
 from urllib.parse import parse_qs, urlsplit
 
 from src.predict import (
-    CSV_NUMERIC_FEATURES, DEFAULT_MODEL_PATH, PREDICTION_COLUMN,
+    CSV_NUMERIC_FEATURES, DEFAULT_MODEL_PATH, PREDICTION_COLUMN, PredictionOutputError,
     predict, predict_many, read_patient_csv, read_patient_json, read_prediction_csv, validate_patient,
 )
 from src.preprocessing import RAW_FEATURES
@@ -985,6 +985,9 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                     self.respond_json(200, audit_patients(patients))
                     return
                 predictions = predict_many(patients, model_path)
+            except PredictionOutputError:
+                self.respond_json(503, {"error": "The model returned invalid prediction output."})
+                return
             except (ValueError, TypeError, UnicodeError) as error:
                 self.respond_json(400, {"error": str(error)})
                 return

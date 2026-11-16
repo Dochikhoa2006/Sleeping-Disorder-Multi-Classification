@@ -10,13 +10,33 @@ from unittest.mock import patch
 import joblib
 import sklearn
 
-from src.predict import PREDICTION_COLUMN, load_patient_csv, load_patient_json, main, predict, predict_many
+from src.predict import PREDICTION_COLUMN, PredictionOutputError, load_patient_csv, load_patient_json, main, predict, predict_many
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
 
 
 class PredictionTests(unittest.TestCase):
+    def test_malformed_model_batch_results_rejected(self):
+        outputs = ([], ["Healthy"], ["Healthy"] * 3, "Healthy", [["Healthy"], ["Healthy"]],
+                   [["Healthy"], ["Healthy", "Insomnia"]])
+        for output in outputs:
+            with self.subTest(output=output), patch("src.predict.joblib.load") as load:
+                load.return_value.predict.return_value = output
+                with self.assertRaises(PredictionOutputError):
+                    predict_many([self.sample_patient()] * 2)
+
+    def test_invalid_model_result_preserves_existing_json_export(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "predictions.json"
+            output.write_text("existing export")
+            with patch("sys.argv", ["predict", "--input-json", "examples/patient.json", "--output-json", str(output)]), \
+                    patch("src.predict.joblib.load") as load:
+                load.return_value.predict.return_value = []
+                with self.assertRaisesRegex(SystemExit, "one prediction per patient"):
+                    main()
+            self.assertEqual(output.read_text(), "existing export")
+
     def test_json_pipeline_returns_only_json_and_keeps_streams_open(self) -> None:
         source = StringIO("\ufeff" + json.dumps([self.sample_patient()] * 2))
         output, errors = StringIO(), StringIO()
