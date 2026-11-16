@@ -15,6 +15,7 @@ from numbers import Real
 from typing import Any, TextIO
 
 import joblib
+import numpy as np
 import pandas as pd
 
 from src.preprocessing import RAW_FEATURES
@@ -32,6 +33,10 @@ NUMERIC_RANGES = {
     "Physical Activity Level": (0, 1440), "Stress Level": (1, 10),
     "Heart Rate": (20, 250), "Daily Steps": (0, 100000),
 }
+
+
+class PredictionOutputError(ValueError):
+    """A model returned an invalid batch result rather than invalid patient data."""
 
 
 def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -229,7 +234,13 @@ def predict_many(
     patient_frame = pd.DataFrame(
         [{key: patient[key] for key in RAW_FEATURES} for patient in patients]
     )
-    return [str(label) for label in pipeline.predict(patient_frame)]
+    try:
+        predictions = np.asarray(pipeline.predict(patient_frame))
+    except (ValueError, TypeError) as error:
+        raise PredictionOutputError("Model could not return a valid prediction batch.") from error
+    if predictions.ndim != 1 or len(predictions) != len(patients):
+        raise PredictionOutputError("Model must return exactly one prediction per patient in a one-dimensional array.")
+    return [str(label) for label in predictions]
 
 
 def parse_args() -> argparse.Namespace:
