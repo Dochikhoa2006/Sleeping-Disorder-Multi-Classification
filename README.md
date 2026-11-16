@@ -1143,6 +1143,10 @@ python -m src.evaluation_report --input-json evaluation.json --output evaluation
 
 Open the self-contained HTML file to review accuracy, macro F1, evaluated-row
 count, and a labeled confusion matrix, or print it to PDF from your browser.
+A per-class table shows precision, recall, F1, and actual/predicted counts,
+derived directly from the validated matrix rather than trusting saved detail
+fields. Undefined class scores display as zero, including absent classes;
+displayed scores are rounded to three decimal places.
 The report includes available model/data provenance and the original JSON file's
 SHA-256. It has no scripts or external assets and loads no model. Text is escaped,
 and matrix counts, row totals, accuracy, and macro F1 are checked for consistency

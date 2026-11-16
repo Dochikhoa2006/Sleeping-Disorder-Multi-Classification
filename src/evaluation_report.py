@@ -39,10 +39,18 @@ def render_evaluation(report: dict, *, source_sha256: str = "") -> str:
         raise ValueError("Macro F1 does not match the confusion matrix.")
     headers = "".join(f'<th scope="col">{escape(label)}</th>' for label in labels)
     rows = []
+    class_rows = []
     for index, (label, counts) in enumerate(zip(labels, matrix, strict=True)):
         cells = "".join(f'<td class="{"correct" if index == column else "error"}">{count}</td>'
                         for column, count in enumerate(counts))
         rows.append(f'<tr><th scope="row">{escape(label)}</th>{cells}<td>{sum(counts)}</td></tr>')
+        support, predicted = sum(counts), sum(row[index] for row in matrix)
+        correct = counts[index]
+        precision = correct / predicted if predicted else 0
+        recall = correct / support if support else 0
+        f1 = 2 * correct / (support + predicted) if support + predicted else 0
+        class_rows.append(f'<tr><th scope="row">{escape(label)}</th><td>{precision:.3f}</td>'
+                          f'<td>{recall:.3f}</td><td>{f1:.3f}</td><td>{support}</td><td>{predicted}</td></tr>')
     provenance = "".join(f'<dt>{escape(key)}</dt><dd>{escape(str(report[key]))}</dd>'
                          for key in ("model_name", "model_sha256", "dataset_sha256", "training_overlap_rows", "total_rows")
                          if key in report)
@@ -62,6 +70,11 @@ dd{{margin:0 0 12px;overflow-wrap:anywhere}}dt{{font-weight:bold}}@media print{{
 <h2>Confusion matrix</h2><p>Rows are actual labels; columns are predicted labels. Counts on the diagonal are correct predictions.</p>
 <div class="matrix"><table><caption>Prediction counts by actual and predicted class</caption><thead><tr><th scope="col">Actual / predicted</th>
 {headers}<th scope="col">Actual total</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>
+<h2>Per-class metrics</h2><p>Metrics are derived from the matrix above. Undefined precision, recall, or F1 is shown as zero,
+including classes without actual or predicted observations. Scores are rounded to three decimal places.</p>
+<div class="matrix"><table><caption>Class scores and observation counts</caption><thead><tr>
+<th scope="col">Class</th><th scope="col">Precision</th><th scope="col">Recall</th><th scope="col">F1</th>
+<th scope="col">Actual count</th><th scope="col">Predicted count</th></tr></thead><tbody>{''.join(class_rows)}</tbody></table></div>
 <h2>Provenance</h2><dl>{provenance}</dl>
 <p>This is a summary of saved aggregate metrics. Optional subgroup, bootstrap, and row diagnostics remain in the original JSON.
 Scores depend on the evaluated sample and do not establish clinical validity. This educational classifier is not medical advice.</p>

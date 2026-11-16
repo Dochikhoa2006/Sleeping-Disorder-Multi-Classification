@@ -13,6 +13,21 @@ from src.evaluation_report import render_evaluation
 
 
 class EvaluationReportTests(unittest.TestCase):
+    def test_per_class_metrics_come_from_counts_instead_of_unchecked_saved_details(self):
+        report = self.report()
+        report["per_class"] = {"Healthy": {"precision": 0, "recall": 0, "f1-score": 0}}
+        html = render_evaluation(report)
+        self.assertIn("Class scores and observation counts", html)
+        self.assertIn('<th scope="row">Healthy</th><td>1.000</td><td>0.500</td><td>0.667</td><td>2</td><td>1</td>', html)
+        self.assertIn('<th scope="row">Insomnia</th><td>0.500</td><td>1.000</td><td>0.667</td><td>1</td><td>2</td>', html)
+
+    def test_per_class_metrics_show_absent_classes_and_escape_labels(self):
+        report = {"labels": ["Healthy", "<img src=x>"], "evaluated_rows": 1,
+                  "confusion_matrix": [[1, 0], [0, 0]], "accuracy": 1, "macro_f1": .5}
+        html = render_evaluation(report)
+        self.assertIn('<th scope="row">&lt;img src=x&gt;</th><td>0.000</td><td>0.000</td><td>0.000</td><td>0</td><td>0</td>', html)
+        self.assertNotIn("<img", html)
+
     def report(self):
         return {"labels": ["Healthy", "Insomnia"], "evaluated_rows": 3,
                 "model_name": '<script>alert("x")</script>',
