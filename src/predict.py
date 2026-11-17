@@ -67,6 +67,31 @@ def read_patient_json(input_file: TextIO) -> dict[str, Any] | list[dict[str, Any
     return patient
 
 
+def read_patient_json_lines(input_file: TextIO) -> list[dict[str, Any]]:
+    """Validate one patient object per LF-delimited line before inference."""
+    lines = input_file.read().removeprefix("\ufeff").split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    patients = []
+    for number, line in enumerate(lines, start=1):
+        try:
+            record = read_patient_json(StringIO(line))
+            if not isinstance(record, dict):
+                raise ValueError("Each line must contain one patient object.")
+            validate_patients([record])
+        except (ValueError, TypeError) as error:
+            raise ValueError(f"JSON Lines line {number}: {error}") from error
+        patients.append(record)
+    if not patients:
+        raise ValueError("JSON Lines input must contain at least one patient object.")
+    return patients
+
+
+def load_patient_json_lines(path: Path) -> list[dict[str, Any]]:
+    with path.open(encoding="utf-8-sig", newline="") as source:
+        return read_patient_json_lines(source)
+
+
 def load_patient_csv(path: Path) -> tuple[list[str], list[dict[str, str]], list[dict[str, Any]]]:
     """Read CSV rows without changing their original values for output."""
     with path.open(encoding="utf-8-sig", newline="") as input_file:
@@ -256,6 +281,8 @@ def parse_args() -> argparse.Namespace:
     input_group.add_argument(
         "--input-csv", type=Path, help="CSV with one patient per row; use - to read standard input."
     )
+    input_group.add_argument("--input-jsonl", type=Path,
+                             help="One patient JSON object per line; use - for standard input.")
     parser.add_argument(
         "--output-json",
         type=Path,
@@ -277,12 +304,12 @@ def main() -> None:
     arguments = parse_args()
     if arguments.validate_only and (arguments.output_json or arguments.output_csv):
         raise SystemExit("Error: --validate-only cannot be combined with output options.")
-    if arguments.output_json and not arguments.input_json:
-        raise SystemExit("Error: --output-json requires --input-json.")
+    if arguments.output_json and not (arguments.input_json or arguments.input_jsonl):
+        raise SystemExit("Error: --output-json requires --input-json or --input-jsonl.")
     if arguments.output_csv and not arguments.input_csv:
         raise SystemExit("Error: --output-csv requires --input-csv.")
     output = arguments.output_json or arguments.output_csv
-    source = arguments.input_json or arguments.input_csv
+    source = arguments.input_json or arguments.input_csv or arguments.input_jsonl
     if output and source and output != Path("-") and source != Path("-") and output.resolve() == source.resolve():
         raise SystemExit("Error: output path must differ from input path.")
     if output and output != Path("-") and output.resolve() == arguments.model.resolve():
@@ -293,6 +320,9 @@ def main() -> None:
                 read_patient_csv(StringIO(sys.stdin.read().removeprefix("\ufeff")))
                 if arguments.input_csv == Path("-") else load_patient_csv(arguments.input_csv)
             )
+        elif arguments.input_jsonl:
+            patients = (read_patient_json_lines(sys.stdin) if arguments.input_jsonl == Path("-")
+                        else load_patient_json_lines(arguments.input_jsonl))
         else:
             patient_data = (
                 (read_patient_json(StringIO(sys.stdin.read().removeprefix("\ufeff")))

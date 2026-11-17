@@ -1268,6 +1268,19 @@ within strings, retain Unicode, and project the same 11 fields. JSON Lines
 conversion validates the entire in-memory batch before publishing any output;
 it is not a streaming inference interface. Use `--input-jsonl -` for standard input.
 
+The prediction CLI also accepts the same validated JSON Lines format:
+
+```bash
+python -m src.predict --input-jsonl patients.jsonl --validate-only
+python -m src.predict --input-jsonl patients.jsonl --output-json predictions.json
+python -m src.convert --input-csv examples/patients.csv --to jsonl | \
+  python -m src.predict --input-jsonl - --output-json -
+```
+
+Predictions are a JSON array in input order. The entire batch is validated before
+model loading, so a bad later line produces no partial predictions or file writes.
+This remains in-memory batch inference; `--output-csv` requires CSV input.
+
 Omit `--output` or use `--output -` to write only the converted data to standard
 output. Use `-` with either input option to read standard input. File exports are
 atomic, invalid batches preserve existing output, and the input and shipped model

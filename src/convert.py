@@ -9,7 +9,7 @@ import sys
 
 from src.output import atomic_text_output
 from src.predict import (CSV_NUMERIC_FEATURES, DEFAULT_MODEL_PATH, read_patient_csv,
-                         read_patient_json, validate_patients)
+                         read_patient_json, read_patient_json_lines, validate_patients)
 from src.preprocessing import RAW_FEATURES
 
 
@@ -20,21 +20,7 @@ def convert_text(content: str, input_format: str, output_format: str) -> str:
     if input_format == "csv":
         _, _, patients = read_patient_csv(source)
     elif input_format == "jsonl":
-        lines = source.read().split("\n")
-        if lines and lines[-1] == "":
-            lines.pop()
-        patients = []
-        for number, line in enumerate(lines, start=1):
-            try:
-                record = read_patient_json(StringIO(line))
-                if not isinstance(record, dict):
-                    raise ValueError("Each line must contain one patient object.")
-                validate_patients([record])
-            except (ValueError, TypeError) as error:
-                raise ValueError(f"JSON Lines line {number}: {error}") from error
-            patients.append(record)
-        if not patients:
-            raise ValueError("JSON Lines input must contain at least one patient object.")
+        patients = read_patient_json_lines(source)
     else:
         records = read_patient_json(source)
         patients = records if isinstance(records, list) else [records]
