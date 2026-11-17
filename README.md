@@ -863,6 +863,10 @@ one field at a time among unseen records and measure the decrease in macro F1.
 The report ranks fields by mean score drop and includes every repeat, standard
 deviation, baseline score, class counts, training-overlap exclusions, and input/
 model hashes. Blood pressure is shuffled as one raw field. No model is retrained.
+Baseline and permuted predictions must each contain one declared class label per
+row in a one-dimensional batch. Unknown labels or malformed results stop scoring
+instead of silently omitting predictions from fixed-label F1 calculations, and
+do not replace an existing report.
 
 The CSV must satisfy patient input validation and contain explicit `Sleep Disorder`
 labels known to the model. Profiles matching its stored training fingerprints are

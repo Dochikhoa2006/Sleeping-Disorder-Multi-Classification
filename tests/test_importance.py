@@ -17,6 +17,32 @@ from src.preprocessing import build_pipeline, RAW_FEATURES, TARGET_COLUMN
 
 
 class ImportanceTests(unittest.TestCase):
+    def test_invalid_baseline_predictions_preserve_existing_cli_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data, path, model = self.fixtures(root)
+            output = root / "importance.json"
+            output.write_text("existing report")
+            args = ["importance", "--data", str(data), "--model", str(path), "--repeats", "2", "--output", str(output)]
+            with patch("sys.argv", args), patch("src.importance.joblib.load", return_value=model), \
+                    patch.object(model, "predict", return_value=["Unknown"] * 5), \
+                    patch("src.importance.permutation_importance") as permute:
+                with self.assertRaisesRegex(SystemExit, "declared class labels"):
+                    main()
+                permute.assert_not_called()
+            self.assertEqual(output.read_text(), "existing report")
+
+    def test_invalid_prediction_during_permutation_stops_scoring(self):
+        with tempfile.TemporaryDirectory() as directory:
+            data, path, model = self.fixtures(Path(directory))
+            # The wrapper and sklearn each score the unchanged baseline first.
+            outputs = [["Healthy"] * 5, ["Healthy"] * 5, ["Unknown"] * 5]
+            with patch("src.importance.joblib.load", return_value=model), \
+                    patch.object(model, "predict", side_effect=outputs) as predictor:
+                with self.assertRaisesRegex(ValueError, "declared class labels"):
+                    measure_importance(data, path, repeats=2)
+                self.assertEqual(predictor.call_count, 3)
+
     def fixtures(self, root):
         patient = json.loads(Path('examples/patient.json').read_text())
         patients = [{**patient, 'Age': 25 + index} for index in range(6)]
