@@ -161,6 +161,35 @@ def summarize(records: list[dict], end: date, days: int = 7) -> dict:
             "nights": nights}
 
 
+def diary_gaps(records: list[dict], end: date, days: int = 28) -> dict:
+    """Locate missing bedtime dates and recording streaks within one window."""
+    if type(days) is not int or not 1 <= days <= 366:
+        raise ValueError("Choose a gap-report period from 1 to 366 days.")
+    report = summarize(records, end, days)
+    recorded = {night["date"] for night in report["nights"]}
+    if len(recorded) != len(report["nights"]):
+        raise ValueError("Duplicate night date.")
+    start = parse_date(report["start_date"])
+    ranges, streak, longest = [], 0, 0
+    for offset in range(days):
+        day = (start + timedelta(days=offset)).isoformat()
+        if day in recorded:
+            streak += 1
+            longest = max(longest, streak)
+        else:
+            if not ranges or streak or offset == 0:
+                ranges.append({"start_date": day, "end_date": day, "nights": 1})
+            else:
+                ranges[-1]["end_date"] = day
+                ranges[-1]["nights"] += 1
+            streak = 0
+    return {"start_date": report["start_date"], "end_date": report["end_date"],
+            "recorded_nights": len(recorded), "unrecorded_nights": days - len(recorded),
+            "recorded_fraction": len(recorded) / days, "missing_ranges": ranges,
+            "longest_missing_streak": max((group["nights"] for group in ranges), default=0),
+            "longest_recorded_streak": longest, "ending_recorded_streak": streak}
+
+
 def weekday_summary(records: list[dict], end: date, days: int = 28) -> dict:
     """Describe bedtime-date weekdays without treating missing entries as zero."""
     if type(days) is not int or not 1 <= days <= 366:
@@ -265,6 +294,9 @@ def main() -> None:
     weekdays = commands.add_parser("weekdays", help="Summarize recorded sleep by bedtime-date weekday.")
     weekdays.add_argument("--end", default=date.today().isoformat())
     weekdays.add_argument("--days", type=int, default=28)
+    gaps = commands.add_parser("gaps", help="List missing diary date ranges and recording streaks.")
+    gaps.add_argument("--end", default=date.today().isoformat())
+    gaps.add_argument("--days", type=int, default=28)
     export = commands.add_parser("export-calendar", help="Save diary nights as an iCalendar .ics file.")
     export.add_argument("--output", type=Path, required=True)
     restore = commands.add_parser("import", help="Merge a diary CSV backup into the local diary.")
@@ -280,6 +312,9 @@ def main() -> None:
                       "quality": str(args.quality) if args.quality is not None else ""}
             add_night(args.file, record, replace=args.replace)
             print(f"Saved night {args.date} to {args.file}")
+        elif args.command == "gaps":
+            print(json.dumps(diary_gaps(load_diary(args.file), parse_date(args.end), args.days),
+                             indent=2, allow_nan=False))
         elif args.command == "weekdays":
             print(json.dumps(weekday_summary(load_diary(args.file), parse_date(args.end), args.days),
                              indent=2, allow_nan=False))

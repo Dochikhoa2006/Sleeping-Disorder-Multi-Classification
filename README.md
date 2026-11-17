@@ -717,6 +717,23 @@ ending today. No diary data is sent anywhere. These are self-reported estimates,
 not measurements or a medical assessment. This is a local, single-writer tool;
 avoid simultaneous edits from multiple processes.
 
+### Find missing diary dates
+
+```bash
+python -S -m src.diary gaps --end 2026-11-17 --days 28
+```
+
+List consecutive missing bedtime-date ranges, their lengths, and the longest
+missing and recorded streaks in a selected 1–366 day window. JSON also reports
+recorded/missing counts, the fraction recorded, and the recording streak ending
+exactly on the requested end date (zero if that date is unrecorded). All streaks
+are clipped to the selected window; dates outside it do not extend them.
+
+This read-only command defaults to 28 days ending today and needs no ML packages.
+It does not create missing files, fill gaps, or treat an unrecorded night as zero
+sleep. The report contains dates but no sleep times or ratings; dates may still
+be sensitive. Streaks describe recording coverage, not sleep quality.
+
 ### Compare recorded sleep by weekday
 
 ```bash
