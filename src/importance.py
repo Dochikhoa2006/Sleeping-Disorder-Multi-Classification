@@ -13,9 +13,9 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.inspection import permutation_importance
-from sklearn.metrics import f1_score, make_scorer
+from sklearn.metrics import f1_score
 
-from src.evaluation import feature_fingerprints
+from src.evaluation import feature_fingerprints, validate_metric_inputs
 from src.output import atomic_text_output
 from src.predict import DEFAULT_MODEL_PATH, read_patient_csv
 from src.preprocessing import RANDOM_STATE, RAW_FEATURES, TARGET_COLUMN
@@ -45,7 +45,11 @@ def measure_importance(data_path: Path, model_path: Path = DEFAULT_MODEL_PATH,
     if overlap.all():
         raise ValueError("All input rows match training profiles; no unseen rows to score.")
     features, target = features.loc[~overlap], target.loc[~overlap]
-    scorer = make_scorer(f1_score, labels=labels, average="macro", zero_division=0, pos_label=None)
+    def scorer(estimator, frame, actual):
+        predicted = estimator.predict(frame)
+        validate_metric_inputs(actual, predicted, labels)
+        return float(f1_score(actual, predicted, labels=labels, average="macro", zero_division=0))
+
     baseline = float(scorer(model, features, target))
     importance = permutation_importance(model, features, target, scoring=scorer,
                                        n_repeats=repeats, random_state=seed, n_jobs=1)

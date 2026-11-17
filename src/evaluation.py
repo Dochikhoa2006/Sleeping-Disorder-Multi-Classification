@@ -19,7 +19,8 @@ from src.preprocessing import CATEGORICAL_FEATURES, NUMERIC_FEATURES, RANDOM_STA
 from src.output import atomic_text_output
 
 
-def classification_metrics(target: pd.Series, predictions: list[str], labels: list[str]) -> dict:
+def validate_metric_inputs(target, predictions, labels) -> None:
+    """Reject outputs that would disappear from fixed-label scoring."""
     if (not isinstance(labels, (list, tuple)) or not labels
             or any(not isinstance(label, str) or not label.strip() for label in labels)
             or len(set(labels)) != len(labels)):
@@ -30,6 +31,10 @@ def classification_metrics(target: pd.Series, predictions: list[str], labels: li
         raise ValueError("Metric targets and predictions must be aligned nonempty one-dimensional vectors.")
     if not np.isin(actual, labels).all() or not np.isin(predicted, labels).all():
         raise ValueError("Metric targets and predictions must use only the declared class labels.")
+
+
+def classification_metrics(target: pd.Series, predictions: list[str], labels: list[str]) -> dict:
+    validate_metric_inputs(target, predictions, labels)
     return {
         "accuracy": float(accuracy_score(target, predictions)),
         "macro_f1": float(f1_score(target, predictions, labels=labels, average="macro", zero_division=0)),
