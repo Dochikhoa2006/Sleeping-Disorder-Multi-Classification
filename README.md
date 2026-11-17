@@ -1415,7 +1415,10 @@ dependencies instead of failing while importing them. Exact version mismatches
 are reported even if a different version might otherwise run successfully.
 
 Add `--smoke-test` to deserialize the trusted model and predict the included
-synthetic example after prerequisite checks pass. This verifies runtime inference;
+synthetic example after prerequisite checks pass. The smoke test uses the same
+strict output validation as prediction receipts: valid classifier metadata and
+exactly one declared class label in a one-dimensional result are required.
+Malformed or unknown outputs mark the prediction check as failed. This verifies runtime inference;
 a readable file alone does not prove a model works. Use `--model /path/to/model`
 to check another trusted artifact. Diagnostics do not install packages, modify
 files, bind a port, or read a personal diary. `--json` emits a complete structured
