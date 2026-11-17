@@ -133,6 +133,26 @@ On Windows PowerShell, activate the environment with:
 .venv\Scripts\Activate.ps1
 ```
 
+## Command launcher
+
+From the repository root, use one entry point to discover and run the tools:
+
+```bash
+python -m src --help
+python -m src predict --input-json examples/patient.json
+python -m src convert --input-csv examples/patients.csv --to jsonl
+python -m src diary summary --days 7
+python -m src split --help
+```
+
+Running `python -m src` without arguments lists commands and descriptions.
+Arguments after the command, including `--help`, go to that tool's existing
+parser, and its exit status is preserved. Hyphenated command names such as
+`model-info`, `verify-receipt`, and `clean-batch` appear in the help listing.
+Only the selected tool is imported: launcher help and diary operations remain
+usable with the standard library alone. Existing `python -m src.predict` and
+other module commands continue to work.
+
 ## Train
 
 Place the dataset at
