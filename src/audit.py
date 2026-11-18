@@ -1,4 +1,4 @@
-"""Audit every record in a JSON or CSV patient batch without loading a model."""
+"""Audit every record in JSON, JSON Lines, or CSV without loading a model."""
 
 from __future__ import annotations
 
@@ -12,7 +12,13 @@ import sys
 
 from src.output import atomic_text_output
 from src.predict import (load_patient_json, read_patient_json, validate_patient,
-                         validate_csv_columns, parse_csv_patient)
+                         validate_csv_columns, parse_csv_patient, _unique_json_object)
+
+
+def _summary(results: list[dict]) -> dict:
+    valid = sum(record["valid"] for record in results)
+    return {"total_records": len(results), "valid_records": valid,
+            "invalid_records": len(results) - valid, "records": results}
 
 
 def audit_patients(records: dict | list[dict]) -> dict:
@@ -30,9 +36,28 @@ def audit_patients(records: dict | list[dict]) -> dict:
             results.append({"patient": index, "valid": False, "error": str(error)})
         else:
             results.append({"patient": index, "valid": True})
-    valid = sum(record["valid"] for record in results)
-    return {"total_records": len(results), "valid_records": valid,
-            "invalid_records": len(results) - valid, "records": results}
+    return _summary(results)
+
+
+def audit_json_lines(input_file: TextIO) -> dict:
+    """Collect syntax and patient errors for every physical JSON line."""
+    lines = input_file.read().removeprefix("\ufeff").split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    if not lines:
+        raise ValueError("JSON Lines input must contain at least one record.")
+    results = []
+    for number, line in enumerate(lines, start=1):
+        result = {"patient": number, "json_line": number, "valid": True}
+        try:
+            patient = json.loads(line, object_pairs_hook=_unique_json_object)
+            if not isinstance(patient, dict):
+                raise ValueError("Each line must contain one patient object.")
+            validate_patient(patient)
+        except (ValueError, TypeError) as error:
+            result.update(valid=False, error=str(error))
+        results.append(result)
+    return _summary(results)
 
 
 def audit_csv(input_file: TextIO) -> dict:
@@ -50,9 +75,7 @@ def audit_csv(input_file: TextIO) -> dict:
         results.append(result)
     if not results:
         raise ValueError("Patient CSV must have at least one patient row.")
-    valid = sum(record["valid"] for record in results)
-    return {"total_records": len(results), "valid_records": valid,
-            "invalid_records": len(results) - valid, "records": results}
+    return _summary(results)
 
 
 def main() -> None:
@@ -62,10 +85,12 @@ def main() -> None:
                         help="Patient JSON file; use - for standard input.")
     inputs.add_argument("--input-csv", type=Path,
                         help="Patient CSV file; use - for standard input.")
+    inputs.add_argument("--input-jsonl", type=Path,
+                        help="One patient per line; use - for standard input.")
     parser.add_argument("--output", type=Path,
                         help="Save the audit as JSON; omit or use - for standard output.")
     args = parser.parse_args()
-    source = args.input_json or args.input_csv
+    source = args.input_json or args.input_csv or args.input_jsonl
     if (args.output and args.output != Path("-") and source != Path("-")
             and args.output.resolve() == source.resolve()):
         raise SystemExit("Error: output path must differ from input path.")
@@ -76,6 +101,12 @@ def main() -> None:
             else:
                 with source.open(encoding="utf-8-sig", newline="") as input_file:
                     report = audit_csv(input_file)
+        elif args.input_jsonl:
+            if source == Path("-"):
+                report = audit_json_lines(sys.stdin)
+            else:
+                with source.open(encoding="utf-8-sig", newline="") as input_file:
+                    report = audit_json_lines(input_file)
         else:
             records = (read_patient_json(StringIO(sys.stdin.read().removeprefix("\ufeff")))
                        if source == Path("-") else load_patient_json(source))

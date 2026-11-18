@@ -622,6 +622,24 @@ malformed quoting, and files without data rows are file-level errors that leave
 an existing report untouched. As with JSON audits, invalid records produce the
 complete report and exit status 1; fully valid batches exit with status 0.
 
+### Audit every JSON Lines record
+
+```bash
+python -m src audit --input-jsonl patients.jsonl --output audit.json
+cat patients.jsonl | python -m src audit --input-jsonl -
+```
+
+JSON Lines audits check each physical line independently, continuing past JSON
+syntax errors, duplicate keys, blank lines, non-object values, and invalid patient
+fields. Reports include `json_line`, patient position, and the first error for
+each invalid line. Valid records after an error are still checked. A final newline,
+CRLF, a leading UTF-8 BOM, and Unicode characters inside strings are supported.
+
+Any invalid records produce the complete report then exit 1; valid batches exit
+0. Empty files and file-level read/encoding errors preserve an existing report.
+No model is loaded, and raw patient values are omitted. Unlike prediction's
+fail-fast JSON Lines reader, this audit collects all line errors for correction.
+
 ### Prepare a new batch in the browser
 
 Open `/guide` in the local web app for a reference to every required field,
