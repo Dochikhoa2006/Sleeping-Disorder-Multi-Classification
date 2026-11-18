@@ -2,6 +2,7 @@ from contextlib import redirect_stdout
 from importlib import metadata
 from io import StringIO
 import json
+import hashlib
 from pathlib import Path
 import tempfile
 import subprocess
@@ -14,6 +15,47 @@ from src.doctor import ASSETS, check_installation, main
 
 
 class DoctorTests(unittest.TestCase):
+    def test_matching_expected_hash_accepts_uppercase_and_never_deserializes_by_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = self.fixture(root)
+            expected = hashlib.sha256(model.read_bytes()).hexdigest()
+            with patch("src.doctor.metadata.version", return_value="1.2.3"), patch("src.doctor._smoke_test") as smoke:
+                report = check_installation(root=root, expected_model_sha256=expected.upper())
+            smoke.assert_not_called()
+            self.assertTrue(report["healthy"])
+            self.assertEqual(next(row for row in report["checks"] if row["name"] == "model_hash")["status"], "ok")
+            with patch("src.doctor.metadata.version", return_value="1.2.3"), patch("src.doctor._smoke_test", return_value="Healthy") as smoke:
+                report = check_installation(root=root, expected_model_sha256=expected, smoke_test=True)
+            self.assertTrue(report["healthy"])
+            smoke.assert_called_once_with(model.read_bytes(), root / "examples" / "patient.json")
+
+    def test_mismatched_expected_hash_skips_smoke_test(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            with patch("src.doctor.metadata.version", return_value="1.2.3"), patch("src.doctor._smoke_test") as smoke:
+                report = check_installation(root=root, expected_model_sha256="0" * 64, smoke_test=True)
+            smoke.assert_not_called()
+            self.assertFalse(report["healthy"])
+            self.assertEqual(next(row for row in report["checks"] if row["name"] == "model_hash")["status"], "failed")
+            self.assertEqual(report["checks"][-1]["status"], "skipped")
+
+    def test_invalid_expected_hash_rejected_before_model_access(self):
+        for value in ("", "0" * 63, "g" * 64, True, 123):
+            with self.subTest(value=value), patch.object(Path, "read_bytes") as read:
+                with self.assertRaisesRegex(ValueError, "SHA-256"):
+                    check_installation(expected_model_sha256=value)
+                read.assert_not_called()
+
+    def test_cli_invalid_hash_never_runs_diagnostics(self):
+        with patch("sys.argv", ["doctor", "--expected-model-sha256", "invalid"]), \
+                patch("src.doctor.check_installation") as check, patch("sys.stderr", StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                main()
+            self.assertEqual(raised.exception.code, 2)
+            check.assert_not_called()
+
     def test_invalid_prediction_shapes_or_unknown_labels_fail_diagnostics(self):
         patient = json.loads(Path("examples/patient.json").read_text())
         for predictions in ([], [["Healthy"]], ["Unknown"], "Healthy"):

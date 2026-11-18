@@ -6,6 +6,7 @@ import argparse
 import hashlib
 from importlib import metadata
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -30,8 +31,16 @@ def _smoke_test(snapshot: bytes, patient_path: Path) -> str:
     return receipt["predictions"][0]["prediction"]
 
 
+def _expected_hash(value: str) -> str:
+    if not isinstance(value, str) or re.fullmatch(r"[0-9a-fA-F]{64}", value) is None:
+        raise ValueError("Expected model SHA-256 must contain exactly 64 hexadecimal characters.")
+    return value.lower()
+
+
 def check_installation(*, root: Path = PROJECT_ROOT, model_path: Path | None = None,
-                       smoke_test: bool = False) -> dict:
+                       smoke_test: bool = False, expected_model_sha256: str | None = None) -> dict:
+    if expected_model_sha256 is not None:
+        expected_model_sha256 = _expected_hash(expected_model_sha256)
     checks = []
     def add(name, passed, detail):
         checks.append({"name": name, "status": "ok" if passed else "failed", "detail": detail})
@@ -73,6 +82,10 @@ def check_installation(*, root: Path = PROJECT_ROOT, model_path: Path | None = N
         add("model_file", True, f"Readable artifact: {len(snapshot)} bytes. Not deserialized by this check.")
     except (OSError, ValueError) as error:
         add("model_file", False, str(error))
+    if expected_model_sha256 is not None:
+        add("model_hash", digest == expected_model_sha256,
+            f"Expected {expected_model_sha256}; actual {digest}." if digest is not None
+            else "Model file unavailable; cannot verify the expected SHA-256.")
     if smoke_test:
         if any(check["status"] == "failed" for check in checks):
             checks.append({"name": "prediction", "status": "skipped", "detail": "Resolve failed checks before running a prediction."})
@@ -89,10 +102,13 @@ def check_installation(*, root: Path = PROJECT_ROOT, model_path: Path | None = N
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path)
+    parser.add_argument("--expected-model-sha256", type=_expected_hash,
+                        help="Require a previously recorded artifact hash before any smoke-test deserialization.")
     parser.add_argument("--smoke-test", action="store_true", help="Load the trusted model and predict the synthetic example.")
     parser.add_argument("--json", action="store_true", help="Print a machine-readable diagnostic report.")
     args = parser.parse_args()
-    report = check_installation(model_path=args.model, smoke_test=args.smoke_test)
+    report = check_installation(model_path=args.model, smoke_test=args.smoke_test,
+                                expected_model_sha256=args.expected_model_sha256)
     if args.json:
         print(json.dumps(report, indent=2))
     else:

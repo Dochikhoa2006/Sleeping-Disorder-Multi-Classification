@@ -1444,6 +1444,20 @@ report; exit status is 0 when all requested checks pass and 1 otherwise. Predict
 checks are skipped if a prerequisite fails, and inference errors are captured in
 the report. Without `--smoke-test`, no joblib artifact is deserialized.
 
+To require an independently recorded model hash, set `TRUSTED_MODEL_SHA256` to
+that 64-character hexadecimal digest, then run:
+
+```bash
+python -m src.doctor --expected-model-sha256 "$TRUSTED_MODEL_SHA256" --smoke-test --json
+```
+
+Uppercase and lowercase hex are accepted. A mismatch produces a failed
+`model_hash` check and skips inference before deserialization; an unreadable model
+also fails this check. Invalid hash syntax is rejected before diagnostics run.
+The hash check uses the same byte snapshot passed to the smoke test. It confirms
+agreement with the supplied digest, so the expected value must come from a trusted
+record. Default diagnostics remain unchanged when the option is omitted.
+
 ### Save a traceable prediction receipt
 
 Choose **Save prediction receipt** on the patient form, or generate a batch receipt:
