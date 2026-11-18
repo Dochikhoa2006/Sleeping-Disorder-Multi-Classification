@@ -20,21 +20,14 @@ ASSETS = (
 
 
 def _smoke_test(snapshot: bytes, patient_path: Path) -> str:
-    from io import BytesIO
-    import joblib
-    import pandas as pd
-    from src.predict import load_patient_json, validate_patient
-    from src.preprocessing import RAW_FEATURES
+    from src.predict import load_patient_json
+    from src.receipt import create_receipt_from_bytes
 
     patient = load_patient_json(patient_path)
     if not isinstance(patient, dict):
         raise ValueError("The example must contain one patient object.")
-    validate_patient(patient)
-    model = joblib.load(BytesIO(snapshot))
-    predictions = model.predict(pd.DataFrame([{key: patient[key] for key in RAW_FEATURES}]))
-    if len(predictions) != 1:
-        raise ValueError("Model did not return one prediction for the example.")
-    return str(predictions[0])
+    receipt = create_receipt_from_bytes([patient], snapshot)
+    return receipt["predictions"][0]["prediction"]
 
 
 def check_installation(*, root: Path = PROJECT_ROOT, model_path: Path | None = None,

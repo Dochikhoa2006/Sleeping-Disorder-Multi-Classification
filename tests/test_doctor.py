@@ -7,12 +7,39 @@ import tempfile
 import subprocess
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 from src.doctor import ASSETS, check_installation, main
 
 
 class DoctorTests(unittest.TestCase):
+    def test_invalid_prediction_shapes_or_unknown_labels_fail_diagnostics(self):
+        patient = json.loads(Path("examples/patient.json").read_text())
+        for predictions in ([], [["Healthy"]], ["Unknown"], "Healthy"):
+            with self.subTest(predictions=predictions), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.fixture(root)
+                (root / "examples" / "patient.json").write_text(json.dumps(patient))
+                model = SimpleNamespace(classes_=["Healthy"], model_name_="Fixture", predict=Mock(return_value=predictions))
+                with patch("src.doctor.metadata.version", return_value="1.2.3"), patch("src.receipt.joblib.load", return_value=model):
+                    report = check_installation(root=root, smoke_test=True)
+                self.assertFalse(report["healthy"])
+                self.assertEqual(report["checks"][-1]["status"], "failed")
+                self.assertIn("one known class label", report["checks"][-1]["detail"])
+
+    def test_invalid_classifier_metadata_fails_before_inference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            (root / "examples" / "patient.json").write_text(Path("examples/patient.json").read_text())
+            model = SimpleNamespace(predict=Mock(return_value=["Healthy"]))
+            with patch("src.doctor.metadata.version", return_value="1.2.3"), patch("src.receipt.joblib.load", return_value=model):
+                report = check_installation(root=root, smoke_test=True)
+            self.assertFalse(report["healthy"])
+            self.assertIn("fitted classifier", report["checks"][-1]["detail"])
+            model.predict.assert_not_called()
+
     def fixture(self, root):
         (root / 'src').mkdir()
         (root / 'models').mkdir()
