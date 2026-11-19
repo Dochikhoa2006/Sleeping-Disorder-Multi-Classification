@@ -29,15 +29,29 @@ def patient_schema(*, batch: bool = False) -> dict:
             **({"type": "array", "minItems": 1, "items": patient} if batch else patient)}
 
 
+def api_input_schema() -> dict:
+    """Describe both JSON shapes accepted by prediction and validation APIs."""
+    patient = patient_schema()
+    dialect = patient.pop("$schema")
+    patient.pop("title")
+    return {"$schema": dialect, "title": "Patient API input",
+            "$defs": {"patient": patient},
+            "oneOf": [{"$ref": "#/$defs/patient"},
+                      {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/patient"}}]}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--batch", action="store_true", help="Describe a nonempty array instead of a single patient.")
+    shapes = parser.add_mutually_exclusive_group()
+    shapes.add_argument("--batch", action="store_true", help="Describe a nonempty array instead of a single patient.")
+    shapes.add_argument("--api", action="store_true", help="Describe either a patient object or nonempty array, as accepted by the API.")
     parser.add_argument("--output", type=Path, help="Atomic JSON file; omit for standard output.")
     args = parser.parse_args()
     try:
         if args.output and args.output.resolve() == DEFAULT_MODEL_PATH.resolve():
             raise ValueError("Output must differ from the shipped model path.")
-        payload = json.dumps(patient_schema(batch=args.batch), indent=2, ensure_ascii=False) + "\n"
+        schema = api_input_schema() if args.api else patient_schema(batch=args.batch)
+        payload = json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
         if args.output:
             with atomic_text_output(args.output) as destination:
                 destination.write(payload)

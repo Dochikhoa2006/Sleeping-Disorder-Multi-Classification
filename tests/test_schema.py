@@ -9,10 +9,25 @@ from unittest.mock import patch
 
 from src.predict import NUMERIC_RANGES, validate_patient
 from src.preprocessing import RAW_FEATURES
-from src.schema import main, patient_schema
+from src.schema import main, patient_schema, api_input_schema
 
 
 class SchemaTests(unittest.TestCase):
+    def test_api_schema_reuses_patient_fields_and_accepts_both_shapes(self):
+        schema = api_input_schema()
+        patient = patient_schema()
+        patient.pop("$schema")
+        patient.pop("title")
+        self.assertEqual(schema["$defs"]["patient"], patient)
+        self.assertEqual(schema["oneOf"][0], {"$ref": "#/$defs/patient"})
+        self.assertEqual(schema["oneOf"][1], {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/patient"}})
+
+    def test_api_schema_cli_stdout(self):
+        output = StringIO()
+        with patch("sys.argv", ["schema", "--api"]), redirect_stdout(output):
+            main()
+        self.assertEqual(json.loads(output.getvalue()), api_input_schema())
+
     def test_required_fields_and_shared_limits_match_runtime(self):
         schema = patient_schema()
         self.assertEqual(schema["required"], RAW_FEATURES)
