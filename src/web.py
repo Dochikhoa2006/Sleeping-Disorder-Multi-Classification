@@ -29,6 +29,7 @@ from src.model_info import inspect_model
 from src.evaluation import evaluate_bytes
 from src.drift import compare_dataset_bytes
 from src.audit import audit_patients
+from src.schema import api_input_schema
 from src.receipt import create_receipt
 from src.prediction_diff import compare_prediction_exports, ID_COLUMN
 from src.calendar_export import render_calendar
@@ -623,6 +624,8 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                     self.respond(403, "Local requests only.")
             elif self.path == "/api/health":
                 self.respond_json(200, {"status": "ok"})
+            elif self.path == "/api/schema":
+                self.respond_json(200, api_input_schema())
             elif self.path.startswith("/api/"):
                 post_route = self.path in {"/api/predict", "/api/validate"}
                 self.respond_json(405 if post_route else 404,
@@ -686,9 +689,10 @@ def make_server(model_path: Path = DEFAULT_MODEL_PATH, port: int = 8765, *, bind
                 if self.path in {"/api/predict", "/api/validate"}:
                     self.api_predict(validation_only=self.path == "/api/validate")
                 else:
-                    self.respond_json(405 if self.path == "/api/health" else 404,
-                                      {"error": "Use GET for the health check." if self.path == "/api/health" else "API route not found."},
-                                      allow="GET" if self.path == "/api/health" else None)
+                    get_route = self.path in {"/api/health", "/api/schema"}
+                    self.respond_json(405 if get_route else 404,
+                                      {"error": "Use GET for this API route." if get_route else "API route not found."},
+                                      allow="GET" if get_route else None)
                 return
             if self.path == "/drift":
                 self.drift_upload()

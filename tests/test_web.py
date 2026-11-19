@@ -21,6 +21,25 @@ from src.model_info import inspect_model
 
 
 class WebTests(unittest.TestCase):
+    def test_api_schema_is_shared_json_without_model_access(self):
+        from src.schema import api_input_schema
+        with patch("src.predict.joblib.load") as load:
+            status, headers, body = self.request("GET", "/api/schema")
+        load.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "application/json; charset=utf-8")
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(json.loads(body), api_input_schema())
+
+    def test_api_schema_requires_get_and_local_origin(self):
+        status, headers, body = self.request("POST", "/api/schema", "{}", {"Content-Type": "application/json"})
+        self.assertEqual(status, 405)
+        self.assertEqual(headers["Allow"], "GET")
+        self.assertIn("error", json.loads(body))
+        status, _, body = self.request("GET", "/api/schema", headers={"Origin": "https://example.com"})
+        self.assertEqual(status, 403)
+        self.assertIn("error", json.loads(body))
+
     def test_server_keeps_loopback_default_and_supports_container_binding(self):
         for bind in ("127.0.0.1", "0.0.0.0"):
             with self.subTest(bind=bind), make_server(port=0, bind=bind) as server:

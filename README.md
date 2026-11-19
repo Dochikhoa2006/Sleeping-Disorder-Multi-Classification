@@ -442,6 +442,7 @@ Start `python -m src.web`, then call the prediction API from another terminal:
 
 ```bash
 curl http://127.0.0.1:8765/api/health
+curl http://127.0.0.1:8765/api/schema
 curl -H "Content-Type: application/json" \
   --data-binary @examples/patient.json \
   http://127.0.0.1:8765/api/predict
@@ -466,6 +467,14 @@ GET/POST methods `405`. API errors use JSON. The API stays on localhost and
 does not store or log patient inputs. `GET /api/health` is a lightweight
 liveness check that does not load the model. Predictions remain educational
 model outputs, not diagnoses.
+
+`GET /api/schema` returns the shared Draft 2020-12 input schema for either a
+single patient object or a nonempty batch. It uses local `$defs` references,
+loads no model, and follows the API's local host/origin restrictions. Clients can
+use it for field discovery and early structural checks; blood-pressure bounds
+and relationships still require runtime validation. The same document is
+available offline with `python -m src schema --api`. This describes request
+inputs for prediction and validation; it is not an OpenAPI specification.
 
 ### Validate batches through the API
 
