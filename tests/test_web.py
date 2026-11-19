@@ -126,6 +126,22 @@ class WebTests(unittest.TestCase):
             writer.writerow({**DEFAULT_PATIENT, "Record ID": f"patient-{index}", PREDICTION_COLUMN: label})
         return output.getvalue().encode("utf-8-sig")
 
+    def test_batch_comparison_shows_changed_fields_in_page_and_csv(self):
+        baseline = self.prediction_export(1, "Healthy")
+        rows = list(csv.DictReader(StringIO(baseline.decode("utf-8-sig"))))
+        rows[0]["Age"] = "45"
+        output = StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+        status, _, body = self.comparison_upload(baseline, output.getvalue().encode())
+        self.assertEqual(status, 200)
+        self.assertIn("Changed Input Fields", body)
+        encoded = re.search(r'data:text/csv;charset=utf-8;base64,([^"\s]+)', body).group(1)
+        comparison = list(csv.DictReader(StringIO(base64.b64decode(encoded).decode())))
+        self.assertEqual(comparison[0]["Changed Input Fields"], "Age")
+        self.assertNotIn("45", comparison[0]["Changed Input Fields"])
+
     def test_batch_comparison_previews_100_differences_and_downloads_all(self):
         with patch("src.predict.joblib.load") as load:
             status, _, body = self.comparison_upload(self.prediction_export(105, "Healthy"),

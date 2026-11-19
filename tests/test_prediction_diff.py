@@ -10,6 +10,21 @@ from src.predict import PREDICTION_COLUMN
 
 
 class PredictionDiffTests(unittest.TestCase):
+    def test_changed_inputs_name_fields_without_exporting_their_values(self):
+        before = self.export([{"Record ID": "A"}])
+        after = self.export([{"Record ID": "A", "Age": 45, "Occupation": "Nurse", "Blood Pressure": "130/85"}])
+        report = compare_prediction_exports(before, after)
+        self.assertEqual(report["records"][0]["Changed Input Fields"], "Age; Occupation; Blood Pressure")
+        self.assertNotIn("Nurse", json.dumps(report))
+        self.assertNotIn("130/85", json.dumps(report))
+
+    def test_normalized_aliases_and_signed_zero_have_no_changed_fields(self):
+        before = self.export([{"Sleep Duration": 0}])
+        after = self.export([{"Sleep Duration": "-0.0", "BMI Category": " Normal Weight ", "Blood Pressure": " 120 / 80 "}])
+        report = compare_prediction_exports(before, after)
+        self.assertEqual(report["records"][0]["Status"], "unchanged")
+        self.assertEqual(report["records"][0]["Changed Input Fields"], "")
+
     def export(self, records):
         patient = json.loads(Path('examples/patient.json').read_text())
         rows = [{**patient, 'Record ID': str(index), PREDICTION_COLUMN: 'Healthy', **changes}
