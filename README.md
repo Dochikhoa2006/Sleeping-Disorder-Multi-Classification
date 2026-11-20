@@ -956,6 +956,22 @@ loaded, and labels are not required. Omit `--output` for JSON on standard output
 File reports are atomic and cannot overwrite either input. Reports include
 aggregate category names, so consider their contents before sharing them.
 
+For automated checks, optionally set inclusive distance limits:
+
+```bash
+python -m src drift --reference reference-patients.csv --current new-patients.csv \
+  --max-ks-distance 0.3 --max-category-distance 0.2 --output input-drift.json
+```
+
+Each numeric feature must have KS distance at most its configured limit, and
+each categorical feature must have total variation distance at most its limit.
+Limits must be finite numbers from 0 to 1. The report adds `limits`, per-field
+`limit_checks`, and `passed`; a limit failure writes the complete report then
+exits 1. Invalid limits fail before reading inputs or replacing an existing report.
+Omitting limits preserves the original report format and success behavior.
+These are user-chosen operational limits, not statistical significance tests or
+evidence of reduced prediction accuracy.
+
 ### Manage the diary in your browser
 
 ```bash
