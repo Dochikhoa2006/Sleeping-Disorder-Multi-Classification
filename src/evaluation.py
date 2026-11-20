@@ -43,8 +43,8 @@ def classification_metrics(target: pd.Series, predictions: list[str], labels: li
     }
 
 
-def feature_fingerprints(features: pd.DataFrame) -> pd.Series:
-    """Hash only the engineered features actually consumed by the model."""
+def normalized_feature_values(features: pd.DataFrame) -> pd.DataFrame:
+    """Canonical model inputs shared by profile matching and field comparisons."""
     engineered = SleepFeatureEngineer().transform(features)
     for column in NUMERIC_FEATURES:
         engineered[column] = pd.to_numeric(engineered[column], errors="coerce").astype("float64")
@@ -52,7 +52,12 @@ def feature_fingerprints(features: pd.DataFrame) -> pd.Series:
         engineered[column] = engineered[column].mask(engineered[column].eq(0), 0.0)
     for column in CATEGORICAL_FEATURES:
         engineered[column] = engineered[column].astype("string")
-    return pd.util.hash_pandas_object(engineered, index=False)
+    return engineered
+
+
+def feature_fingerprints(features: pd.DataFrame) -> pd.Series:
+    """Hash only the engineered features actually consumed by the model."""
+    return pd.util.hash_pandas_object(normalized_feature_values(features), index=False)
 
 
 def validate_bootstrap_options(runs: int, seed: int) -> None:

@@ -1086,6 +1086,13 @@ prediction change, the record is classified as `inputs_changed`, with both
 predictions still shown. This avoids presenting a changed patient profile as a
 model-only regression.
 
+The `Changed Input Fields` column names the raw fields whose normalized model
+values differ, in the standard input order. Blood-pressure component changes are
+reported as `Blood Pressure`; equivalent numeric formatting, signed zero, trimmed
+categories, and BMI aliases do not count as changes. Values themselves are not
+included. The column is empty for added/removed IDs and for unchanged input profiles.
+It appears in browser results, the comparison CSV download, and CLI JSON reports.
+
 The page shows up to 100 differences. Download the complete comparison, including
 unchanged IDs, in baseline order followed by candidate-only IDs. The server does
 not store uploads or load a model. These are comparisons of exported results,

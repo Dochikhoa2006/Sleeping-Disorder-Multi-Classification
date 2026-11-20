@@ -436,7 +436,7 @@ def render_batch_comparison(report: dict | None = None, *, error: str | None = N
                   "inputs_changed": "Input profile changed", "added": "Added IDs", "removed": "Removed IDs"}
         cards = ''.join(f'<article><p>{escape(label)}</p><strong>{counts[key]}</strong></article>' for key, label in labels.items())
         changes = [row for row in report["records"] if row["Status"] != "unchanged"]
-        columns = [ID_COLUMN, "Status", "Baseline Prediction", "Candidate Prediction"]
+        columns = [ID_COLUMN, "Status", "Baseline Prediction", "Candidate Prediction", "Changed Input Fields"]
         rows = ''.join('<tr>' + ''.join(f'<td>{escape(row[column])}</td>' for column in columns) + '</tr>'
                        for row in changes[:PREVIEW_ROWS])
         output = StringIO(newline="")
@@ -451,7 +451,7 @@ def render_batch_comparison(report: dict | None = None, *, error: str | None = N
                    f'<a class="download-link" href="data:text/csv;charset=utf-8;base64,{download}" download="prediction-comparison.csv">Download full comparison ↓</a>'
                    '<div class="table-scroll"><table><caption>Changed, added, and removed records</caption><thead><tr>'
                    + ''.join(f'<th scope="col">{escape(column)}</th>' for column in columns)
-                   + '</tr></thead><tbody>' + (rows or '<tr><td colspan="4">No differences found.</td></tr>') + '</tbody></table></div></section>')
+                   + '</tr></thead><tbody>' + (rows or f'<tr><td colspan="{len(columns)}">No differences found.</td></tr>') + '</tbody></table></div></section>')
     workspace = Template(TEMPLATE_PATH.with_name("web_batch_comparison.html").read_text(encoding="utf-8")).substitute(feedback=feedback, results=results)
     return Template(TEMPLATE_PATH.read_text(encoding="utf-8")).substitute(workspace=workspace, layout_class="dashboard")
 
