@@ -256,6 +256,12 @@ def predict_many(
     """Validate all records, then run one batch through the saved pipeline."""
     validate_patients(patients)
     pipeline = joblib.load(model_path)
+    classes = np.asarray(getattr(pipeline, "classes_", []))
+    if classes.ndim != 1 or not len(classes):
+        raise PredictionOutputError("Model must be a fitted classifier with class labels.")
+    known_labels = [str(label) for label in classes]
+    if any(not label.strip() for label in known_labels) or len(set(known_labels)) != len(known_labels):
+        raise PredictionOutputError("Model class labels must be distinct nonempty strings.")
     patient_frame = pd.DataFrame(
         [{key: patient[key] for key in RAW_FEATURES} for patient in patients]
     )
@@ -265,7 +271,10 @@ def predict_many(
         raise PredictionOutputError("Model could not return a valid prediction batch.") from error
     if predictions.ndim != 1 or len(predictions) != len(patients):
         raise PredictionOutputError("Model must return exactly one prediction per patient in a one-dimensional array.")
-    return [str(label) for label in predictions]
+    labels = [str(label) for label in predictions]
+    if any(label not in known_labels for label in labels):
+        raise PredictionOutputError("Model must predict only its declared class labels.")
+    return labels
 
 
 def parse_args() -> argparse.Namespace:

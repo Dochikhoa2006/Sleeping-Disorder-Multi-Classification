@@ -299,12 +299,23 @@ class WebTests(unittest.TestCase):
 
     def test_prediction_api_reports_invalid_model_batch_as_service_failure(self):
         with patch("src.predict.joblib.load") as load:
+            load.return_value.classes_ = ["Healthy"]
             load.return_value.predict.return_value = []
             status, _, body = self.request("POST", "/api/predict", json.dumps(DEFAULT_PATIENT),
                                            {"Content-Type": "application/json"})
         self.assertEqual(status, 503)
         self.assertEqual(json.loads(body), {"error": "The model returned invalid prediction output."})
         self.assertNotIn("predictions", json.loads(body))
+
+    def test_prediction_api_rejects_undeclared_model_labels(self):
+        with patch("src.predict.joblib.load") as load:
+            load.return_value.classes_ = ["Healthy"]
+            load.return_value.predict.return_value = ["Unknown"]
+            status, _, body = self.request("POST", "/api/predict", json.dumps(DEFAULT_PATIENT),
+                                           {"Content-Type": "application/json"})
+        self.assertEqual(status, 503)
+        self.assertNotIn("predictions", json.loads(body))
+        self.assertNotIn("Unknown", body)
 
     def test_json_api_health_check_does_not_load_the_model(self) -> None:
         with patch("src.predict.joblib.load") as load_model:

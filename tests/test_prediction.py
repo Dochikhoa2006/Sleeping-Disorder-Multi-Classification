@@ -17,11 +17,31 @@ MODEL_PATH = PROJECT_ROOT / "models" / "sleep_disorder_pipeline.joblib"
 
 
 class PredictionTests(unittest.TestCase):
+    def test_missing_or_invalid_classifier_labels_fail_before_prediction(self):
+        for classes in (None, [], [["Healthy"]], ["Healthy", "Healthy"], [" "]):
+            with self.subTest(classes=classes), patch("src.predict.joblib.load") as load:
+                if classes is None:
+                    del load.return_value.classes_
+                else:
+                    load.return_value.classes_ = classes
+                with self.assertRaises(PredictionOutputError):
+                    predict_many([self.sample_patient()])
+                load.return_value.predict.assert_not_called()
+
+    def test_undeclared_model_predictions_are_rejected(self):
+        for label in ("Unknown", 123, None):
+            with self.subTest(label=label), patch("src.predict.joblib.load") as load:
+                load.return_value.classes_ = ["Healthy"]
+                load.return_value.predict.return_value = [label]
+                with self.assertRaisesRegex(PredictionOutputError, "declared class labels"):
+                    predict_many([self.sample_patient()])
+
     def test_malformed_model_batch_results_rejected(self):
         outputs = ([], ["Healthy"], ["Healthy"] * 3, "Healthy", [["Healthy"], ["Healthy"]],
                    [["Healthy"], ["Healthy", "Insomnia"]])
         for output in outputs:
             with self.subTest(output=output), patch("src.predict.joblib.load") as load:
+                load.return_value.classes_ = ["Healthy", "Insomnia"]
                 load.return_value.predict.return_value = output
                 with self.assertRaises(PredictionOutputError):
                     predict_many([self.sample_patient()] * 2)
@@ -32,6 +52,7 @@ class PredictionTests(unittest.TestCase):
             output.write_text("existing export")
             with patch("sys.argv", ["predict", "--input-json", "examples/patient.json", "--output-json", str(output)]), \
                     patch("src.predict.joblib.load") as load:
+                load.return_value.classes_ = ["Healthy"]
                 load.return_value.predict.return_value = []
                 with self.assertRaisesRegex(SystemExit, "one prediction per patient"):
                     main()

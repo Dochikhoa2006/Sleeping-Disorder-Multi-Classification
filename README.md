@@ -459,8 +459,10 @@ a prediction array in input order:
 Requests are limited to 2 MiB. Invalid batches return `400` with an `error`
 message identifying the invalid patient; no partial predictions are returned.
 Unsupported content types return `415`, oversized requests `413`, and model
-file access failures `503`. Malformed model output (such as a missing batch
-result or a multidimensional result) also returns `503`, without partial
+file access failures `503`. Models must expose distinct nonblank class labels
+and predict only those declared labels. Missing classifier metadata or malformed
+model output (such as undeclared labels, missing batch results, or multidimensional
+results) also returns `503`, without partial
 predictions. The shared CLI prediction path rejects those outputs before
 publishing an export. Unknown API routes return `404` and incorrect
 GET/POST methods `405`. API errors use JSON. The API stays on localhost and
