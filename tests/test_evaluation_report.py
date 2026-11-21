@@ -13,6 +13,26 @@ from src.evaluation_report import render_evaluation
 
 
 class EvaluationReportTests(unittest.TestCase):
+    def test_extreme_integer_metrics_are_validation_errors(self):
+        for name in ("accuracy", "macro_f1"):
+            for value in (10**1000, -(10**1000)):
+                with self.subTest(name=name, negative=value < 0), self.assertRaisesRegex(ValueError, "finite number from 0 to 1"):
+                    render_evaluation({**self.report(), name: value})
+
+    def test_cli_extreme_metric_has_no_traceback_and_preserves_html(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "evaluation.json"
+            output = source.with_suffix(".html")
+            output.write_text("existing report")
+            for name in ("accuracy", "macro_f1"):
+                source.write_text(json.dumps({**self.report(), name: 10**1000}))
+                result = subprocess.run([sys.executable, "-m", "src.evaluation_report", "--input-json", str(source),
+                                         "--output", str(output)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("Error:", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertEqual(output.read_text(), "existing report")
+
     def test_per_class_metrics_come_from_counts_instead_of_unchecked_saved_details(self):
         report = self.report()
         report["per_class"] = {"Healthy": {"precision": 0, "recall": 0, "f1-score": 0}}

@@ -14,6 +14,14 @@ from src.score_exports import score_export
 
 
 class ScoreExportsTests(unittest.TestCase):
+    def test_extreme_integer_thresholds_are_validation_errors_before_csv_parsing(self):
+        for name in ("min_accuracy", "min_macro_f1"):
+            for value in (10**1000, -(10**1000)):
+                with self.subTest(name=name, negative=value < 0), patch("src.score_exports.read_prediction_csv") as read:
+                    with self.assertRaisesRegex(ValueError, "finite number from 0 to 1"):
+                        score_export(b"", **{name: value})
+                    read.assert_not_called()
+
     def batch(self, labels):
         patient = json.loads(Path("examples/patient.json").read_text())
         output = StringIO(newline="")
