@@ -12,6 +12,50 @@ from src.drift import compare_datasets, compare_dataset_bytes, main, numeric_shi
 
 
 class DriftTests(unittest.TestCase):
+    def test_distance_limits_are_inclusive_and_report_each_feature(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference = self.write(root, "reference.csv", [{"Age": 20, "Occupation": "Engineer"}])
+            current = self.write(root, "current.csv", [{"Age": 60, "Occupation": "Teacher"}])
+            with patch("joblib.load") as load:
+                report = compare_datasets(reference, current, max_ks_distance=.5, max_category_distance=.5)
+                boundary = compare_datasets(reference, current, max_ks_distance=1, max_category_distance=1)
+            load.assert_not_called()
+            self.assertFalse(report["passed"])
+            self.assertFalse(report["limit_checks"]["numeric"]["Age"])
+            self.assertFalse(report["limit_checks"]["categorical"]["Occupation"])
+            self.assertTrue(report["limit_checks"]["numeric"]["Daily Steps"])
+            self.assertTrue(boundary["passed"])
+            self.assertNotIn("passed", compare_datasets(reference, current))
+            reference = self.write(root, "many-reference.csv", [{"Occupation": f"Reference {i}"} for i in range(9)])
+            current = self.write(root, "many-current.csv", [{"Occupation": f"Current {i}"} for i in range(9)])
+            self.assertTrue(compare_datasets(reference, current, max_category_distance=1)["passed"])
+
+    def test_invalid_distance_limits_fail_before_file_reads(self):
+        for field in ("max_ks_distance", "max_category_distance"):
+            for value in (-.1, 1.1, 10**1000, float("nan"), float("inf"), True, "0.5"):
+                with self.subTest(field=field, value=value), patch.object(Path, "read_bytes") as read:
+                    with self.assertRaises(ValueError):
+                        compare_datasets(Path("missing-a.csv"), Path("missing-b.csv"), **{field: value})
+                    read.assert_not_called()
+
+    def test_cli_writes_complete_failed_limit_report_and_preserves_invalid_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference = self.write(root, "reference.csv", [{"Age": 20}])
+            current = self.write(root, "current.csv", [{"Age": 60}])
+            output = root / "drift.json"
+            args = ["drift", "--reference", str(reference), "--current", str(current), "--output", str(output), "--max-ks-distance"]
+            with patch("sys.argv", [*args, "0.5"]):
+                with self.assertRaises(SystemExit) as raised:
+                    main()
+            self.assertEqual(raised.exception.code, 1)
+            self.assertFalse(json.loads(output.read_text())["passed"])
+            before = output.read_bytes()
+            with patch("sys.argv", [*args, "nan"]), self.assertRaisesRegex(SystemExit, "finite number"):
+                main()
+            self.assertEqual(output.read_bytes(), before)
+
     def write(self, root, name, changes):
         patient = json.loads(Path('examples/patient.json').read_text())
         path = root / name
