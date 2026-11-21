@@ -21,7 +21,7 @@ def score_export(snapshot: bytes, *, min_accuracy: float | None = None,
                  min_macro_f1: float | None = None) -> dict:
     thresholds = {"accuracy": min_accuracy, "macro_f1": min_macro_f1}
     for name, value in thresholds.items():
-        if value is not None and (type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1):
+        if value is not None and (type(value) not in (int, float) or not 0 <= value <= 1 or not math.isfinite(value)):
             raise ValueError(f"Minimum {name} must be a finite number from 0 to 1.")
     columns, rows, predictions = read_prediction_csv(StringIO(snapshot.decode("utf-8-sig"), newline=""))
     if TARGET_COLUMN not in columns:

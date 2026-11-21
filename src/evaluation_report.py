@@ -28,7 +28,7 @@ def render_evaluation(report: dict, *, source_sha256: str = "") -> str:
         raise ValueError("Evaluated row count must match a nonempty confusion matrix.")
     for name in ("accuracy", "macro_f1"):
         value = report.get(name)
-        if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1:
+        if type(value) not in (int, float) or not 0 <= value <= 1 or not math.isfinite(value):
             raise ValueError(f"{name} must be a finite number from 0 to 1.")
     expected_accuracy = sum(matrix[i][i] for i in range(len(labels))) / total
     if not math.isclose(report["accuracy"], expected_accuracy, abs_tol=1e-9):
